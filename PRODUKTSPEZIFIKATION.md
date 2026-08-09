@@ -3,13 +3,14 @@
 **Status:** Umsetzbare Produktspezifikation, Version 1.0  
 **Stand:** 9. August 2026  
 **Produktname:** RoadRep  
+**Claim:** **RoadRep – Bewerte die Fahrt. Nicht den Fahrer.**  
 **Leitsatz:** **Bewerte das Fahrverhalten, nicht den Menschen.**
 
 ---
 
 ## 1. Kurzfassung
 
-Die App ermöglicht es, ein Kfz-Kennzeichen exakt zu suchen und ausschließlich anhand fest vorgegebener Kategorien zu bewerten. Bewertet wird eine konkrete, selbst beobachtete Verkehrssituation – niemals die Persönlichkeit, Identität oder der vermeintliche Charakter des Fahrers.
+Die App ermöglicht es, ein Kfz-Kennzeichen exakt zu suchen und ausschließlich anhand fest vorgegebener Kategorien zu bewerten. Bewertet wird eine konkrete, selbst beobachtete Verkehrssituation – niemals die Persönlichkeit, Identität oder der vermeintliche Charakter des Fahrers. Ein Kennzeichen identifiziert außerdem nicht sicher die Person am Steuer: **Halter und Fahrer können unterschiedliche Personen sein.**
 
 Jedes Kennzeichen erhält ein Profil mit:
 
@@ -84,6 +85,8 @@ Für den MVP gilt eine Altersgrenze von **18 Jahren**. Eine spätere Öffnung f�
 8. Positive Beobachtungen sind ein gleichwertiger Teil des Produkts.
 9. Negative Rankings einzelner Kennzeichen sind ausgeschlossen.
 10. Schwere Kategorien dürfen nicht humoristisch inszeniert werden.
+11. RoadRep behauptet oder suggeriert niemals, der Halter habe das beobachtete Fahrzeug geführt.
+12. Öffentliche Aussagen beziehen sich immer auf aggregierte Beobachtungen zu einem Kennzeichen, nicht auf eine festgestellte Tatsache über Halter oder Fahrer.
 
 ---
 
@@ -209,7 +212,10 @@ Diese Funktionen erhöhen das Risiko von Belästigung, Prangerwirkung oder Manip
 2. Unterhalb der Schwelle steht „Noch nicht genügend unabhängige Beobachtungen“.
 3. Sichtbar sind Score-Bereich, Vertrauensstufe, Anzahl gültiger Beobachtungen, betrachteter Zeitraum und häufigste Kategorien.
 4. Einzelne Beobachter, Zeitpunkte oder Orte werden nicht angezeigt.
-5. Jede Profilansicht enthält „Profil oder Ergebnis melden“.
+5. Jede Profilansicht enthält unmittelbar beim Score den Hinweis: **„RoadRep bewertet beobachtetes Fahrverhalten. Die Bewertungen stellen keine Aussage über die Person oder den Halter des Fahrzeugs dar. Halter und Fahrer können unterschiedliche Personen sein.“**
+6. Jede Profilansicht enthält „Profil oder Ergebnis melden“.
+
+**Verbindliche Formulierung:** RoadRep schreibt beispielsweise „Für dieses Kennzeichen wurden sieben Beobachtungen der Kategorie ‚Fuhr deutlich zu schnell‘ abgegeben.“ Nicht zulässig sind Formulierungen wie „Der Halter ist ein Raser“, „Dieses Auto fährt immer zu schnell“ oder andere Aussagen, die Beobachtungen als bewiesene Tatsachen über eine Person darstellen.
 
 ### 8.4 Flow D: Mein Kennzeichen verifizieren (P1)
 
@@ -514,16 +520,35 @@ Limits müssen serverseitig konfigurierbar sein, ohne App-Update angepasst werde
 
 Öffentlich durchsuchbare Kennzeichenprofile können datenschutz- und persönlichkeitsrechtliche Risiken erzeugen. Der öffentliche Profilmodus ist deshalb ein **Launch-Gate**: Vor Produktivstart müssen Rechtsgrundlage, Informationspflichten, Betroffenenrechte, Aufbewahrung, Moderationsprozess und die konkrete öffentliche Darstellung durch qualifizierte Rechtsberatung für die vorgesehenen Länder freigegeben werden.
 
+Die Verarbeitung bleibt datenschutzrechtlich relevant, obwohl RoadRep keine Namen veröffentlicht. Kennzeichenbezogene Daten können insbesondere in Verbindung mit weiteren Informationen auf Halter oder Fahrer zurückführbar sein. Für den geplanten öffentlichen Profilmodus muss deshalb vor dem Launch eine dokumentierte Prüfung der Rechtsgrundlage, Erforderlichkeit und Interessenabwägung erfolgen. Dabei sind unter anderem die vernünftigen Erwartungen betroffener Personen, Transparenz, Interventionsmöglichkeiten, Datenverkettung, Verarbeitungsdauer und Verarbeitungsumfang zu bewerten.
+
 Wenn der öffentliche Profilmodus nicht freigegeben wird, startet der MVP mit der sicheren Alternative:
 
 - Einzelprofil nur für einen verifizierten Berechtigten, oder
 - ausschließlich aggregierte Statistiken auf Bezirks-/Regionsebene ohne öffentliches Einzelkennzeichenprofil.
 
-### 14.2 Privacy by Design
+### 14.2 Schutz vor Denunziation und Prangerwirkung
+
+RoadRep darf technisch und redaktionell nicht zu einer Plattform für öffentliche Anschuldigungen werden. Deshalb gelten zusätzlich folgende Regeln:
+
+- keine Ranglisten wie „schlimmster Fahrer“, „Top-Raser“ oder vergleichbare Negativwettbewerbe,
+- keine viralen Hervorhebungen einzelner negativ bewerteter Kennzeichen,
+- keine Push-Nachrichten oder Feed-Einträge, die einzelne schwere Vorwürfe verbreiten,
+- keine Aussagen über Schuld, Gesetzesverstöße, Charakter oder Identität,
+- keine Anzeige einer einzelnen Bewertung als bestätigte Tatsache,
+- keine exakten Beobachtungszeiten, Orte oder Fahrtverläufe,
+- keine Suche nach Haltern oder Fahrern und keine Verknüpfung mit externen Personendaten,
+- keine monetären Vorteile für besonders viele oder besonders negative Bewertungen,
+- leicht auffindbare Melde-, Widerspruchs- und Prüfwege auf jedem Profil,
+- sofortige vorläufige Einschränkung bei plausiblen Hinweisen auf Belästigung, Stalking oder koordinierte Rufschädigung.
+
+Produkttexte verwenden ausschließlich Formulierungen wie „Beobachtungen zu diesem Kennzeichen“ oder „wurde von unabhängigen Konten ausgewählt“. Sie verwenden niemals „Der Fahrer ist …“ oder „Der Halter hat …“.
+
+### 14.3 Privacy by Design
 
 Die technische und organisatorische Gestaltung folgt Datenminimierung, Zweckbindung, Sicherheit, begrenzter Aufbewahrung und datenschutzfreundlichen Voreinstellungen. Diese Prinzipien werden nicht nachträglich ergänzt, sondern bereits in Architektur, UI und Standardkonfiguration umgesetzt.
 
-### 14.3 Moderationsregeln
+### 14.4 Moderationsregeln
 
 - Keine manuelle Erstellung neuer öffentlicher Freitextinhalte.
 - Schwere Beobachtungen unterliegen Veröffentlichungsschwellen.
@@ -533,7 +558,7 @@ Die technische und organisatorische Gestaltung folgt Datenminimierung, Zweckbind
 - Einsprüche werden von einer anderen Person geprüft, wenn organisatorisch möglich.
 - Meldungen gegen geschützte oder besonders gefährdete Personen werden priorisiert.
 
-### 14.4 Betroffenenrechte und Support
+### 14.5 Betroffenenrechte und Support
 
 Das Produkt benötigt klar erreichbare Prozesse für:
 
@@ -547,7 +572,7 @@ Das Produkt benötigt klar erreichbare Prozesse für:
 
 Die konkrete rechtliche Anspruchsprüfung ist keine automatische Produktentscheidung, sondern Teil eines dokumentierten Datenschutzprozesses.
 
-### 14.5 Aufbewahrungsvorschlag
+### 14.6 Aufbewahrungsvorschlag
 
 - gültige Beobachtungen: maximal 24 Monate, danach löschen oder vollständig anonymisieren,
 - Missbrauchsschutz- und Netzwerkdaten: grundsätzlich höchstens 90 Tage,
@@ -557,7 +582,7 @@ Die konkrete rechtliche Anspruchsprüfung ist keine automatische Produktentschei
 
 Die Zeitabwertung des RoadScores ersetzt keine Löschung.
 
-### 14.6 Sicherheit
+### 14.7 Sicherheit
 
 - Verschlüsselung während Übertragung und Speicherung,
 - rollenbasierte Rechte für Support und Moderation,
@@ -569,7 +594,7 @@ Die Zeitabwertung des RoadScores ersetzt keine Löschung.
 - keine Suchmaschinenindexierung von Einzelkennzeichenprofilen,
 - Löschung eines Kontos entfernt oder anonymisiert dessen Zuordnung nach festgelegtem Konzept.
 
-### 14.7 Notfallhinweis
+### 14.8 Notfallhinweis
 
 Bei akuter Gefahr fordert die App ausdrücklich dazu auf, die App nicht während des Fahrens zu bedienen und bei Bedarf die zuständigen Notfall- oder Polizeistellen zu kontaktieren. Die App selbst nimmt keine Notfallmeldungen entgegen.
 
@@ -621,6 +646,8 @@ Bei akuter Gefahr fordert die App ausdrücklich dazu auf, die App nicht während
 - Teil- und Massensuche sind nicht möglich.
 - Profile unterhalb der Mindestschwelle zeigen keinen numerischen Score.
 - Kein Profil zeigt Nutzeridentitäten, exakte Orte oder einzelne Zeitpunkte.
+- Jedes sichtbare Profil zeigt den verbindlichen Hinweis „Halter und Fahrer können unterschiedliche Personen sein“ unmittelbar beim Score.
+- Öffentliche Texte stellen Beobachtungszahlen dar und enthalten keine Tatsachenbehauptung über Halter oder Fahrer.
 
 ### Bewertungen
 
@@ -778,5 +805,8 @@ Diese Fragen blockieren die technische Kernumsetzung nicht, werden aber erst nac
 
 - [Datenschutz-Grundverordnung – offizieller Text bei EUR-Lex](https://eur-lex.europa.eu/eli/reg/2016/679/oj/deu)
 - [EDSA-Leitlinien 4/2019 zu Datenschutz durch Technikgestaltung und datenschutzfreundliche Voreinstellungen](https://www.edpb.europa.eu/documents/guideline/guidelines-42019-on-article-25-data-protection-by-design-and-by-default_de)
+- [BfDI/DSK/VDA – Datenschutzrechtliche Aspekte bei der Nutzung vernetzter und nicht vernetzter Kraftfahrzeuge](https://www.bfdi.bund.de/SharedDocs/Pressemitteilungen/DE/2016/ErklaerungDSK_VDA_VernetzteKfz.html)
+- [DSK – Positionspapier zur audiovisuellen Umgebungserfassung, insbesondere Kriterien der Interessenabwägung](https://www.datenschutzkonferenz-online.de/media/dskb/DSK_Positionspapier_audiovisuelle_Umgebungserfassung.pdf)
+- [§ 185 StGB – Beleidigung, offizieller Gesetzestext](https://www.gesetze-im-internet.de/stgb/__185.html)
 
 Diese Spezifikation ist eine Produkt- und Umsetzungsvorgabe, keine Rechtsberatung. Die rechtlichen Launch-Gates sind verbindliche Projektanforderungen.
