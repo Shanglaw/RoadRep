@@ -1,8 +1,8 @@
-# Produktspezifikation: Kennzeichen-App (MVP)
+# Produktspezifikation: RoadRep (MVP)
 
 **Status:** Umsetzbare Produktspezifikation, Version 1.0  
 **Stand:** 9. August 2026  
-**Arbeitstitel:** RoadScore / KennzeichenKarma  
+**Produktname:** RoadRep  
 **Leitsatz:** **Bewerte das Fahrverhalten, nicht den Menschen.**
 
 ---
