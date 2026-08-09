@@ -1,6 +1,6 @@
 # Produktspezifikation: RoadRep (MVP)
 
-**Status:** Umsetzbare Produktspezifikation, Version 1.0  
+**Status:** Umsetzbare Produktspezifikation, Version 1.1  
 **Stand:** 9. August 2026  
 **Produktname:** RoadRep  
 **Claim:** **RoadRep – Bewerte die Fahrt. Nicht den Fahrer.**  
@@ -12,7 +12,7 @@
 
 Die App ermöglicht es, ein Kfz-Kennzeichen exakt zu suchen und ausschließlich anhand fest vorgegebener Kategorien zu bewerten. Bewertet wird eine konkrete, selbst beobachtete Verkehrssituation – niemals die Persönlichkeit, Identität oder der vermeintliche Charakter des Fahrers. Ein Kennzeichen identifiziert außerdem nicht sicher die Person am Steuer: **Halter und Fahrer können unterschiedliche Personen sein.**
 
-Jedes Kennzeichen erhält ein Profil mit:
+RoadRep führt Bewertungen zu einem Kennzeichen standardmäßig in einem **privaten Profil**. Nur ein verifizierter Berechtigter kann dieses Profil und dessen aggregierte Bewertungen einsehen. Eine öffentliche Darstellung ist ausschließlich nach einer gesonderten, freiwilligen und jederzeit widerrufbaren Freigabe möglich. Ein freigegebenes Profil enthält:
 
 - einem RoadScore von 0 bis 100,
 - einer Verteilung positiver, neutraler und negativer Beobachtungen,
@@ -40,7 +40,7 @@ Verkehrsteilnehmer erleben täglich rücksichtsvolles, auffälliges oder gefähr
 ### 2.4 Produktsäulen
 
 1. **Bewerten:** Eine konkrete Beobachtung in wenigen Schritten erfassen.
-2. **Nachschauen:** Ein Kennzeichenprofil und dessen aggregierten RoadScore ansehen.
+2. **Nachschauen:** Nach Verifizierung das eigene private Kennzeichenprofil ansehen; öffentliche Profile nur nach ausdrücklicher Freigabe des Berechtigten.
 3. **Entdecken:** Später regionale Trends und Statistiken erkunden.
 4. **Eigener Bezug:** Optional das eigene Kennzeichen verifizieren und dessen Wahrnehmung nachvollziehen.
 
@@ -87,6 +87,9 @@ Für den MVP gilt eine Altersgrenze von **18 Jahren**. Eine spätere Öffnung f�
 10. Schwere Kategorien dürfen nicht humoristisch inszeniert werden.
 11. RoadRep behauptet oder suggeriert niemals, der Halter habe das beobachtete Fahrzeug geführt.
 12. Öffentliche Aussagen beziehen sich immer auf aggregierte Beobachtungen zu einem Kennzeichen, nicht auf eine festgestellte Tatsache über Halter oder Fahrer.
+13. Jedes Kennzeichenprofil ist standardmäßig privat und für andere Nutzer nicht einsehbar.
+14. Anmeldung allein gewährt keinen Zugriff auf fremde private Kennzeichenprofile.
+15. Eine öffentliche Profilfreigabe erfordert Verifizierung, gesonderte aktive Zustimmung und bleibt jederzeit widerrufbar.
 
 ---
 
@@ -113,7 +116,8 @@ Der MVP ist ausdrücklich nicht:
 - Konto erstellen und anmelden
 - exakte Kennzeichensuche
 - Kennzeichen normalisieren und validieren
-- Kennzeichenprofil anzeigen
+- „Mein Kennzeichen“ beantragen und verifizieren
+- privates Kennzeichenprofil ausschließlich dem verifizierten Berechtigten anzeigen
 - eine Beobachtung über eine feste Kategorie abgeben
 - RoadScore und Vertrauensstufe berechnen
 - Kategorieverteilung und Bewertungszeitraum anzeigen
@@ -126,7 +130,8 @@ Der MVP ist ausdrücklich nicht:
 
 ### 6.2 Soll-Funktionen (P1)
 
-- „Mein Kennzeichen“ beantragen und verifizieren
+- rechtlich freigegebene öffentliche Profilfreigabe per aktivem Opt-in
+- Vorschau, Bestätigung und sofortiger Widerruf der öffentlichen Freigabe
 - Benachrichtigung bei neuen aggregierten Beobachtungen zum verifizierten Kennzeichen
 - einfache, grobe Bezirksstatistiken ohne Einzelkennzeichen-Ranking
 - Badges für überwiegend positives Verhalten
@@ -162,7 +167,7 @@ Diese Funktionen erhöhen das Risiko von Belästigung, Prangerwirkung oder Manip
 1. **Suchen**
 2. **Bewerten**
 3. **Entdecken** – im MVP nur einfache, aggregierte Statistiken oder ausgeblendet
-4. **Mein Kennzeichen** – P1
+4. **Mein Kennzeichen**
 5. **Konto und Hilfe**
 
 ### 7.2 Screens
@@ -170,8 +175,9 @@ Diese Funktionen erhöhen das Risiko von Belästigung, Prangerwirkung oder Manip
 | Screen | Zweck | Wichtigste Elemente |
 |---|---|---|
 | Start / Suche | Kennzeichen exakt eingeben | Länderwahl, Kennzeichenfeld, Suchen, „Fahrverhalten bewerten“ |
-| Suchergebnis | Ziel prüfen | normalisierte Kennzeichenanzeige, Profil öffnen, Bewertung starten |
-| Kennzeichenprofil | aggregierte Wahrnehmung zeigen | RoadScore, Vertrauensstufe, Zeitraum, Kategorien, Melden-Link |
+| Suchergebnis | Ziel prüfen | normalisierte Kennzeichenanzeige, öffentliche Freigabe erkennen, Bewertung starten |
+| Privates Kennzeichenprofil | eigene aggregierte Wahrnehmung zeigen | RoadScore, Vertrauensstufe, Zeitraum, Kategorien, Sichtbarkeit |
+| Öffentliches Kennzeichenprofil | freiwillig freigegebene aggregierte Ansicht | RoadScore, Vertrauensstufe, Kategorien, Pflicht-Hinweis, Melden-Link |
 | Bewertungsablauf | Beobachtung erfassen | Bestätigung, Kategoriegruppe, Kategorie, Regeln, Absenden |
 | Bestätigung | Abschluss | Erfolgsmeldung, Sperrfrist, Profil öffnen |
 | Mein Kennzeichen | Eigentümerfunktion | Verifizierung, Übersicht, Widerspruch, Einstellungen |
@@ -188,8 +194,8 @@ Diese Funktionen erhöhen das Risiko von Belästigung, Prangerwirkung oder Manip
 2. Nutzer gibt ein vollständiges Kennzeichen ein.
 3. Das System normalisiert Groß-/Kleinschreibung, Leerzeichen und Bindestriche.
 4. Das System validiert das Format.
-5. Bei gültiger Eingabe öffnet sich das Profil.
-6. Bei unbekanntem Kennzeichen erscheint ein leeres Profil mit „Noch nicht genügend Beobachtungen“ und einer Bewertungsmöglichkeit.
+5. Bei öffentlichem `PUBLIC_OPT_IN`-Status öffnet sich das freigegebene aggregierte Profil.
+6. Bei privatem oder unbekanntem Kennzeichen werden keinerlei Bewertungsdaten, Datenmengen oder Profilzustände offengelegt. Die App bietet nur „Fahrverhalten bewerten“ und „Als mein Kennzeichen verifizieren“ an.
 
 **Wichtig:** Im MVP gibt es nur exakte Suche. Keine Teiltreffer, Autovervollständigung, öffentliche Listen oder Suchmaschinenindexierung von Kennzeichenprofilen.
 
@@ -202,22 +208,33 @@ Diese Funktionen erhöhen das Risiko von Belästigung, Prangerwirkung oder Manip
 5. Die App zeigt eine kurze Definition der Kategorie.
 6. Nutzer bestätigt, dass keine Bewertung während des Fahrens abgegeben wird.
 7. Backend prüft Berechtigung, Rate Limits, Duplikate und Risikosignale.
-8. Bei Erfolg wird die Beobachtung gespeichert und gegebenenfalls aggregiert veröffentlicht.
+8. Bei Erfolg wird die Beobachtung gespeichert. Sie wird nur dann aggregiert öffentlich dargestellt, wenn das Kennzeichen rechtlich freigegeben im Zustand `PUBLIC_OPT_IN` steht und alle Mindestschwellen erfüllt sind.
 
 **Zielzeit:** unter 30 Sekunden ab geöffnetem Kennzeichenprofil.
 
-### 8.3 Flow C: Kennzeichenprofil ansehen
+### 8.3 Flow C: Privates Kennzeichenprofil ansehen
 
-1. Profil zeigt RoadScore nur bei ausreichender Datenbasis.
-2. Unterhalb der Schwelle steht „Noch nicht genügend unabhängige Beobachtungen“.
-3. Sichtbar sind Score-Bereich, Vertrauensstufe, Anzahl gültiger Beobachtungen, betrachteter Zeitraum und häufigste Kategorien.
-4. Einzelne Beobachter, Zeitpunkte oder Orte werden nicht angezeigt.
-5. Jede Profilansicht enthält unmittelbar beim Score den Hinweis: **„RoadRep bewertet beobachtetes Fahrverhalten. Die Bewertungen stellen keine Aussage über die Person oder den Halter des Fahrzeugs dar. Halter und Fahrer können unterschiedliche Personen sein.“**
-6. Jede Profilansicht enthält „Profil oder Ergebnis melden“.
+1. Zugriff erhält ausschließlich der angemeldete und für dieses Kennzeichen verifizierte Berechtigte.
+2. Profil zeigt RoadScore nur bei ausreichender Datenbasis.
+3. Unterhalb der Schwelle steht „Noch nicht genügend unabhängige Beobachtungen“.
+4. Sichtbar sind Score-Bereich, Vertrauensstufe, Anzahl gültiger Beobachtungen, betrachteter Zeitraum und häufigste Kategorien.
+5. Einzelne Beobachter, Zeitpunkte oder Orte werden nicht angezeigt.
+6. Die Ansicht zeigt deutlich „Privat – nur für dich sichtbar“.
+7. Eine öffentliche Freigabe wird nur angeboten, wenn sie für das jeweilige Land rechtlich aktiviert ist.
+
+### 8.4 Flow D: Öffentliches Kennzeichenprofil ansehen
+
+1. Das Profil ist nur erreichbar, wenn ein verifizierter Berechtigter es aktiv freigegeben hat.
+2. Profil zeigt RoadScore nur bei ausreichender Datenbasis.
+3. Unterhalb der Schwelle steht „Noch nicht genügend unabhängige Beobachtungen“.
+4. Sichtbar sind Score-Bereich, Vertrauensstufe, Anzahl gültiger Beobachtungen, betrachteter Zeitraum und häufigste Kategorien.
+5. Einzelne Beobachter, Zeitpunkte oder Orte werden nicht angezeigt.
+6. Jede Profilansicht enthält unmittelbar beim Score den Hinweis: **„RoadRep bewertet beobachtetes Fahrverhalten. Die Bewertungen stellen keine Aussage über die Person oder den Halter des Fahrzeugs dar. Halter und Fahrer können unterschiedliche Personen sein.“**
+7. Jede Profilansicht enthält „Profil oder Ergebnis melden“.
 
 **Verbindliche Formulierung:** RoadRep schreibt beispielsweise „Für dieses Kennzeichen wurden sieben Beobachtungen der Kategorie ‚Fuhr deutlich zu schnell‘ abgegeben.“ Nicht zulässig sind Formulierungen wie „Der Halter ist ein Raser“, „Dieses Auto fährt immer zu schnell“ oder andere Aussagen, die Beobachtungen als bewiesene Tatsachen über eine Person darstellen.
 
-### 8.4 Flow D: Mein Kennzeichen verifizieren (P1)
+### 8.5 Flow E: Mein Kennzeichen verifizieren
 
 1. Nutzer beantragt die Zuordnung eines Kennzeichens.
 2. Das System verlangt einen geeigneten Besitz-/Nutzungsnachweis nach dem rechtlich freigegebenen Verfahren.
@@ -225,7 +242,20 @@ Diese Funktionen erhöhen das Risiko von Belästigung, Prangerwirkung oder Manip
 4. Verifizierung verleiht keine Möglichkeit, Bewertungen selbst zu verändern.
 5. Verifizierte Nutzer können Benachrichtigungen, Auskunft, Widerspruch und Moderationsprüfung anstoßen.
 
-### 8.5 Flow E: Melden oder widersprechen
+Die Verifizierung weist nur die aktuelle Berechtigung zur Verwaltung des Kennzeichenprofils nach. Sie beweist weder, wer bei vergangenen Beobachtungen gefahren ist, noch überträgt sie Rechte an Bewertungen einzelner Fahrer.
+
+### 8.6 Flow F: Profil freiwillig öffentlich machen (P1)
+
+1. Nur ein verifizierter Berechtigter sieht die Option „Profil öffentlich machen“.
+2. Die App zeigt eine Vorschau aller öffentlich sichtbaren Daten.
+3. Die Freigabe ist standardmäßig ausgeschaltet und darf nicht mit anderen Erklärungen gebündelt werden.
+4. Der Nutzer bestätigt aktiv: **„Ich möchte das aggregierte RoadRep-Profil dieses Kennzeichens freiwillig öffentlich anzeigen. Mir ist bekannt, dass Halter und Fahrer unterschiedliche Personen sein können. Ich kann die Freigabe jederzeit widerrufen.“**
+5. Das Backend speichert Zeitpunkt, Textversion, Land und freigegebene Profilversion als Nachweis.
+6. Nach Aktivierung wird ausschließlich die aggregierte Ansicht veröffentlicht.
+7. „Öffentliche Freigabe beenden“ verbirgt das Profil sofort; eine erneute Freigabe erfordert eine neue Bestätigung.
+8. Eine Kennzeichenveräußerung, Ummeldung, abgelaufene Verifizierung oder ein Widerspruch setzt den Zustand automatisch auf `PRIVATE` oder `SUSPENDED`.
+
+### 8.7 Flow G: Melden oder widersprechen
 
 1. Nutzer öffnet „Melden“ beziehungsweise „Widerspruch“.
 2. Er wählt einen festen Grund, zum Beispiel Manipulationsverdacht, falsches Kennzeichen, Datenschutzanfrage oder technische Fehlzuordnung.
@@ -340,163 +370,7 @@ Eigenschaften:
 
 ### 10.5 Sichtbarkeit und Vertrauensstufe
 
-Der numerische RoadScore wird erst ab **fünf gültigen Beobachtungen von mindestens drei unabhängigen Konten** angezeigt. Vorher steht „Noch nicht genügend Daten“.
-
-Zusätzlich wird eine Vertrauensstufe angezeigt:
-
-| Stufe | Effektive Datenbasis | Anzeige |
-|---|---:|---|
-| Keine | unter 5 Beobachtungen oder unter 3 Konten | Kein Score |
-| Niedrig | 5–14 gültige Beobachtungen | „Vorläufig“ |
-| Mittel | 15–49 gültige Beobachtungen | „Wachsende Datenbasis“ |
-| Hoch | ab 50 gültigen Beobachtungen | „Breite Datenbasis“ |
-
-Die Vertrauensstufe ist keine Aussage darüber, ob eine einzelne Beobachtung wahr ist. Sie beschreibt nur die Breite der Datenbasis.
-
-### 10.6 Score-Darstellung
-
-- 0–29: deutlich negativ
-- 30–44: eher negativ
-- 45–55: ausgeglichen
-- 56–70: eher positiv
-- 71–100: deutlich positiv
-
-Die UI zeigt immer auch Datenmenge und Aktualität. Der Score darf nie ohne Kontext allein präsentiert werden.
-
-### 10.7 Neuberechnung
-
-- bei Annahme, Sperrung oder Löschung einer Beobachtung,
-- täglich für aktive Kennzeichenprofile wegen Zeitabwertung,
-- vollständig reproduzierbar aus den gültigen Beobachtungen,
-- mit gespeicherter Formelversion, damit spätere Änderungen nachvollziehbar bleiben.
-
----
-
-## 11. Datenmodell-Vorschlag
-
-### 11.1 `users`
-
-| Feld | Typ | Zweck |
-|---|---|---|
-| `id` | UUID | interne ID |
-| `email_normalized` | String, verschlüsselt/geschützt | Anmeldung und Verifizierung |
-| `status` | Enum | active, restricted, suspended, deleted |
-| `email_verified_at` | Timestamp, nullable | Verifizierungsstatus |
-| `created_at` | Timestamp | Erstellung |
-| `deleted_at` | Timestamp, nullable | Löschstatus |
-
-### 11.2 `plates`
-
-| Feld | Typ | Zweck |
-|---|---|---|
-| `id` | UUID | interne ID |
-| `country_code` | String | Land des Kennzeichenformats |
-| `normalized_plate_ciphertext` | String | verschlüsselte Normalform |
-| `lookup_hash` | String, unique | exakte Suche ohne Klartextindex |
-| `display_plate` | String | rechtlich freigegebene Darstellung |
-| `profile_status` | Enum | active, limited, hidden, disputed |
-| `created_at` | Timestamp | Erstellung |
-
-### 11.3 `categories`
-
-| Feld | Typ | Zweck |
-|---|---|---|
-| `id` | UUID | interne ID |
-| `key` | String, unique | stabiler technischer Schlüssel |
-| `label` | String | Nutzertext |
-| `type` | Enum | positive, neutral, negative |
-| `weight` | Integer | RoadScore-Gewicht |
-| `severity` | Integer | Stufe 0–5 |
-| `is_sensitive` | Boolean | besondere Veröffentlichungsschwelle |
-| `definition` | Text | redaktionelle Erklärung |
-| `active_from`, `active_until` | Timestamp | Versionierung |
-
-### 11.4 `observations`
-
-| Feld | Typ | Zweck |
-|---|---|---|
-| `id` | UUID | interne ID |
-| `plate_id` | UUID | Zielkennzeichen |
-| `category_id` | UUID | ausgewählte Kategorie |
-| `reporter_user_id` | UUID | interner Beobachter |
-| `observed_at_bucket` | Date | grober Tag statt exakter öffentlicher Zeit |
-| `created_at` | Timestamp | technische Erstellung |
-| `status` | Enum | pending, valid, withheld, rejected, removed |
-| `moderation_reason_code` | Enum, nullable | feste Begründung |
-| `risk_score` | Decimal | Missbrauchssignal |
-| `formula_version` | String | Bewertungsregel bei Annahme |
-
-### 11.5 `score_snapshots`
-
-| Feld | Typ | Zweck |
-|---|---|---|
-| `plate_id` | UUID | Kennzeichen |
-| `score` | Integer | 0–100 |
-| `confidence_level` | Enum | none, low, medium, high |
-| `valid_observation_count` | Integer | Datenbasis |
-| `unique_reporter_count` | Integer | Unabhängigkeit |
-| `formula_version` | String | Nachvollziehbarkeit |
-| `calculated_at` | Timestamp | Aktualität |
-
-### 11.6 Weitere Tabellen
-
-- `plate_claims`: Antrag und Status von „Mein Kennzeichen“
-- `moderation_cases`: Meldungen, Widersprüche und Entscheidungen
-- `moderation_actions`: unveränderbares Audit-Protokoll
-- `rate_limit_events`: kurzlebige Missbrauchsschutzdaten
-- `account_risk_signals`: Kontorisiko ohne öffentliche Sichtbarkeit
-- `category_versions`: Historie von Bezeichnungen und Gewichten
-
-### 11.7 Datenminimierung
-
-- Keine GPS-Koordinaten oder Bewegungsverläufe speichern.
-- Keine Klarnamen für normale Nutzer erfassen.
-- IP-Adressen nicht dauerhaft als Rohwert speichern; falls nötig, kurzlebig und geschützt für Missbrauchsschutz verarbeiten.
-- Gerätekennungen nur pseudonymisiert, zweckgebunden und mit begrenzter Aufbewahrung nutzen.
-- Verifizierungsdokumente für „Mein Kennzeichen“ getrennt speichern und nach Abschluss nach der festgelegten kurzen Frist löschen.
-
----
-
-## 12. API-Vorschlag
-
-| Methode | Route | Zweck |
-|---|---|---|
-| `POST` | `/v1/plates/lookup` | exakte Kennzeichensuche |
-| `GET` | `/v1/plates/{id}/profile` | aggregiertes Profil |
-| `GET` | `/v1/categories` | aktive Kategorien |
-| `POST` | `/v1/plates/{id}/observations` | Beobachtung abgeben |
-| `POST` | `/v1/plates/{id}/reports` | Profil melden |
-| `POST` | `/v1/observations/{id}/reports` | Beobachtung intern melden, sofern referenzierbar |
-| `POST` | `/v1/plate-claims` | „Mein Kennzeichen“ beantragen |
-| `GET` | `/v1/me/plate-claims` | eigene Anträge abrufen |
-| `POST` | `/v1/privacy-requests` | Auskunft, Widerspruch oder Löschprüfung |
-| `GET` | `/v1/admin/moderation-cases` | Moderationswarteschlange |
-| `POST` | `/v1/admin/moderation-cases/{id}/decision` | Entscheidung dokumentieren |
-
-Jede schreibende Route benötigt Authentifizierung, CSRF-/Token-Schutz, serverseitige Validierung, Rate Limits und Auditierung.
-
----
-
-## 13. Missbrauchsschutz
-
-### 13.1 Mindestschutz im MVP
-
-- Nur verifizierte Konten dürfen bewerten.
-- Pro Konto und Kennzeichen höchstens eine Beobachtung innerhalb von 24 Stunden.
-- Dieselbe Kategorie darf vom selben Konto für dasselbe Kennzeichen höchstens einmal innerhalb von 30 Tagen vergeben werden.
-- Maximal 5 Abgaben in 10 Minuten und 20 Abgaben pro Tag je Konto.
-- Zusätzliche geschützte Limits je Netzwerk- und Gerätesignal.
-- Keine Bewertung des als „Mein Kennzeichen“ verifizierten eigenen Kennzeichens.
-- Konten mit auffälligen Mustern werden gedrosselt oder in manuelle Prüfung gestellt.
-- Gelöschte und neu erstellte Konten dürfen Sperrfristen nicht umgehen.
-
-### 13.2 Erkennung verdächtiger Muster
-
-- viele Bewertungen desselben Kennzeichens in kurzer Zeit,
-- Kontogruppen mit ähnlichem Verhalten,
-- wiederholte ausschließlich schwere Negativbewertungen,
-- automatisierte oder unrealistisch schnelle Eingaben,
-- ungewöhnlich hohe Zahl neu angelegter Kennzeichenprofile,
+Der numerische RoadScore wird erst ab **fünf gültigen Beobachtungen von mindestens drei unabhängigen Konten** angezeigt. Vorher steht „Noch…1778 tokens truncated…profile,
 - gezielte Gegenseitigkeits- oder Vergeltungsmuster.
 
 ### 13.3 Reaktionen des Systems
@@ -522,10 +396,7 @@ Limits müssen serverseitig konfigurierbar sein, ohne App-Update angepasst werde
 
 Die Verarbeitung bleibt datenschutzrechtlich relevant, obwohl RoadRep keine Namen veröffentlicht. Kennzeichenbezogene Daten können insbesondere in Verbindung mit weiteren Informationen auf Halter oder Fahrer zurückführbar sein. Für den geplanten öffentlichen Profilmodus muss deshalb vor dem Launch eine dokumentierte Prüfung der Rechtsgrundlage, Erforderlichkeit und Interessenabwägung erfolgen. Dabei sind unter anderem die vernünftigen Erwartungen betroffener Personen, Transparenz, Interventionsmöglichkeiten, Datenverkettung, Verarbeitungsdauer und Verarbeitungsumfang zu bewerten.
 
-Wenn der öffentliche Profilmodus nicht freigegeben wird, startet der MVP mit der sicheren Alternative:
-
-- Einzelprofil nur für einen verifizierten Berechtigten, oder
-- ausschließlich aggregierte Statistiken auf Bezirks-/Regionsebene ohne öffentliches Einzelkennzeichenprofil.
+RoadRep startet unabhängig vom Ergebnis dieser Prüfung immer mit privaten Profilen. Eine rechtliche Freigabe des öffentlichen Modus erweitert nur die freiwillige Opt-in-Funktion; sie verändert nicht den privaten Standard. Wird auch die private Einzelansicht nicht freigegeben, darf RoadRep ausschließlich ausreichend aggregierte Statistiken auf Bezirks-/Regionsebene ohne Einzelkennzeichenprofil anbieten.
 
 ### 14.2 Schutz vor Denunziation und Prangerwirkung
 
@@ -598,6 +469,46 @@ Die Zeitabwertung des RoadScores ersetzt keine Löschung.
 
 Bei akuter Gefahr fordert die App ausdrücklich dazu auf, die App nicht während des Fahrens zu bedienen und bei Bedarf die zuständigen Notfall- oder Polizeistellen zu kontaktieren. Die App selbst nimmt keine Notfallmeldungen entgegen.
 
+### 14.9 Internationales Rechts- und Freigabemodell
+
+Datenschutz- und Persönlichkeitsrechtsrisiken bestehen nicht nur in Deutschland. RoadRep behandelt deshalb jedes Land als separaten Freigaberaum:
+
+- **Deutschland:** DSGVO sowie deutsches Datenschutz-, Persönlichkeits-, Straf- und Digitaldienste-Recht.
+- **EU/EWR:** gemeinsame DSGVO-Grundlage; nationale Regeln zu Persönlichkeitsrechten, Rufschädigung, Plattformpflichten und Rechtsbehelfen sind zusätzlich zu prüfen.
+- **Großbritannien:** UK GDPR und Data Protection Act; die britische Datenschutzbehörde nennt Fahrzeugkennzeichen ausdrücklich als mögliche indirekte Identifikatoren.
+- **Schweiz:** Schweizer Datenschutzgesetz mit eigenen Transparenz-, Auskunfts-, Berichtigungs- und Löschanforderungen.
+- **Weitere Länder:** keine automatische Übernahme einer bestehenden Freigabe. Datenschutz, Verleumdungsrecht, Verbraucherrecht, Plattformpflichten und Fahrzeugregisterregeln werden je Land geprüft.
+
+Auch ein Betreiber außerhalb Europas kann in den Anwendungsbereich der DSGVO fallen, wenn er Menschen in der EU Angebote macht oder deren Verhalten in der EU beobachtet. Unternehmenssitz und App-Store-Verfügbarkeit ersetzen deshalb keine Länderprüfung.
+
+### 14.10 Technische Länderfreigaben
+
+Rechtlich riskante Funktionen werden nicht fest in die App eingebaut, sondern serverseitig je Land freigeschaltet. Standardwert jeder nicht geprüften Funktion ist `false` beziehungsweise die datenschutzfreundlichste Einstellung.
+
+```yaml
+country: DE
+legal_review_version: "pending"
+private_claimed_profiles: false
+public_profiles: false
+public_score: false
+sensitive_categories_public: false
+regional_statistics: false
+search_engine_indexing: false
+retention_days: 0
+```
+
+Nach schriftlicher Freigabe werden nur die einzeln geprüften Werte aktiviert. Die Konfiguration enthält mindestens:
+
+- freigegebene Profil- und Suchfunktionen,
+- zulässige Kategorien und Veröffentlichungsschwellen,
+- Aufbewahrungs- und Löschfristen,
+- Mindestalter und Verifizierungsanforderungen,
+- Pflichttexte, Einwilligungsversionen und Widerrufsregeln,
+- zuständige Support-, Datenschutz- und Moderationswege,
+- Datum, Umfang und Verantwortlichen der rechtlichen Freigabe.
+
+Eine Länderfreigabe darf nicht durch Client-Manipulation, URL-Parameter, Sprachwahl oder Standortwechsel umgangen werden.
+
 ---
 
 ## 15. Priorisierte Umsetzung
@@ -606,24 +517,27 @@ Bei akuter Gefahr fordert die App ausdrücklich dazu auf, die App nicht während
 
 1. Zielland und Kennzeichenformate festlegen.
 2. Datenschutz- und Persönlichkeitsrechtsprüfung durchführen.
-3. öffentlichen Profilmodus oder sichere Alternative verbindlich wählen.
-4. Kategorien, Definitionen und Moderationsrichtlinie redaktionell freigeben.
-5. Lösch-, Auskunfts- und Sicherheitskonzept verabschieden.
+3. private Einsicht, öffentliche Freigabe und RoadScore jeweils separat rechtlich prüfen.
+4. Länderregel mit standardmäßig deaktivierten Funktionen anlegen.
+5. Kategorien, Definitionen und Moderationsrichtlinie redaktionell freigeben.
+6. Lösch-, Auskunfts- und Sicherheitskonzept verabschieden.
 
 ### Phase 1: Sicheres Kern-MVP
 
 1. Konto und verifizierte Anmeldung
 2. exakte Kennzeichensuche und Normalisierung
-3. Kennzeichenprofil mit Mindestdaten-Schwelle
-4. Bewertungsablauf mit festen Kategorien
-5. RoadScore Version 1 und tägliche Neuberechnung
-6. Rate Limits und Basiserkennung von Missbrauch
-7. Meldungs-, Widerspruchs- und Moderationsablauf
-8. Datenschutz-, Hilfe- und Sicherheitsseiten
+3. „Mein Kennzeichen“-Verifizierung und private Profilansicht
+4. Kennzeichenprofil mit Mindestdaten-Schwelle
+5. Bewertungsablauf mit festen Kategorien
+6. RoadScore Version 1 und tägliche Neuberechnung
+7. Rate Limits und Basiserkennung von Missbrauch
+8. Meldungs-, Widerspruchs- und Moderationsablauf
+9. Datenschutz-, Hilfe- und Sicherheitsseiten
+10. serverseitige Länderfreigaben mit sicheren Standardwerten
 
 ### Phase 2: Eigener Bezug und positive Bindung
 
-1. „Mein Kennzeichen“-Verifizierung
+1. rechtlich freigegebener öffentlicher Opt-in mit Vorschau und sofortigem Widerruf
 2. Benachrichtigungen mit sicheren Standardeinstellungen
 3. positive Badges
 4. verständlichere Score-Erklärungen und Verlauf in groben Zeiträumen
@@ -644,6 +558,10 @@ Bei akuter Gefahr fordert die App ausdrücklich dazu auf, die App nicht während
 - Gültige Kennzeichen werden zuverlässig normalisiert.
 - Ungültige Eingaben erzeugen eine verständliche Fehlermeldung.
 - Teil- und Massensuche sind nicht möglich.
+- Anmeldung allein ermöglicht keinen Zugriff auf fremde private Profile.
+- Private oder unbekannte Kennzeichen liefern bei der Suche keine Bewertungszahl und keinen Hinweis auf die Existenz eines Profils.
+- Nur ein verifizierter Berechtigter kann das private Profil eines Kennzeichens aufrufen.
+- Öffentliche Profile existieren ausschließlich nach dokumentiertem Opt-in und können sofort widerrufen werden.
 - Profile unterhalb der Mindestschwelle zeigen keinen numerischen Score.
 - Kein Profil zeigt Nutzeridentitäten, exakte Orte oder einzelne Zeitpunkte.
 - Jedes sichtbare Profil zeigt den verbindlichen Hinweis „Halter und Fahrer können unterschiedliche Personen sein“ unmittelbar beim Score.
@@ -691,6 +609,8 @@ Bei akuter Gefahr fordert die App ausdrücklich dazu auf, die App nicht während
 - Integrationstests für Bewertung, Sperrung, Löschung und Neuberechnung
 - Sicherheitstests für Authentifizierung, Autorisierung und Rate Limits
 - End-to-End-Tests für Suche, Bewertung, Meldung und Moderation
+- Autorisierungstests für private, öffentliche, gesperrte und nicht beanspruchte Profile
+- Tests für Opt-in, Widerruf, abgelaufene Verifizierung und Länder-Feature-Flags
 - Barrierefreiheitstests für Kernseiten
 
 ### 17.2 Zwingende Randfälle
@@ -708,6 +628,10 @@ Bei akuter Gefahr fordert die App ausdrücklich dazu auf, die App nicht während
 - manipulierte Clientdaten,
 - Ausfall der Score-Neuberechnung,
 - laufender Widerspruch gegen ein Profil.
+- Zugriff eines angemeldeten Fremdnutzers auf ein privates Profil,
+- Widerruf während gleichzeitiger Profilaufrufe,
+- Wechsel von `PUBLIC_OPT_IN` zu `PRIVATE` bei Kennzeichenveräußerung,
+- nicht freigegebenes Land oder manipulierte Länderkennung.
 
 ### 17.3 Manuelle Tests
 
@@ -761,7 +685,13 @@ Die Zahl negativer Bewertungen, besonders niedrige Scores oder virale Einzelkenn
 | Wiederholung | 24 Stunden pro Konto/Kennzeichen; 30 Tage für gleiche Kategorie |
 | Negative Rankings | ausgeschlossen |
 | Zielgruppe | Erwachsene aller Altersgruppen; MVP ab 18 |
-| Öffentliche Einzelprofile | nur nach rechtlicher Freigabe |
+| Standard-Sichtbarkeit | `PRIVATE` |
+| Private Einsicht | ausschließlich für verifizierte Berechtigte |
+| Anmeldung | gewährt keinen Zugriff auf fremde private Profile |
+| Öffentliche Einzelprofile | nur nach Länderfreigabe und aktivem, dokumentiertem, widerruflichem Opt-in |
+| Widerruf | verbirgt das Profil sofort |
+| Suchmaschinen | keine Indexierung von Einzelkennzeichenprofilen |
+| Internationalisierung | jede Funktion wird je Land separat rechtlich freigegeben |
 | Monetarisierung | keine käufliche Score- oder Bewertungsbeeinflussung |
 
 ---
@@ -770,7 +700,6 @@ Die Zahl negativer Bewertungen, besonders niedrige Scores oder virale Einzelkenn
 
 Diese Fragen blockieren die technische Kernumsetzung nicht, werden aber erst nach Nutzungsdaten und erneuter Sicherheitsprüfung entschieden:
 
-- endgültiger Produktname und Markenauftritt,
 - Länder außerhalb des ersten Startmarkts,
 - konkrete Verifizierungsmethode für „Mein Kennzeichen“,
 - Art und Umfang positiver Badges,
@@ -787,6 +716,12 @@ Diese Fragen blockieren die technische Kernumsetzung nicht, werden aber erst nac
 ## 21. Launch-Checkliste
 
 - [ ] Rechtsprüfung für Zielland und öffentlichen Profilmodus abgeschlossen
+- [ ] private Profilansicht und Verifizierungsverfahren separat rechtlich freigegeben
+- [ ] öffentliche Freigabe verwendet ein nicht vorausgewähltes, dokumentiertes Opt-in
+- [ ] Widerruf verbirgt ein öffentliches Profil unverzüglich
+- [ ] angemeldete Fremdnutzer können private Profile nicht einsehen
+- [ ] nicht geprüfte Länder und Funktionen sind serverseitig deaktiviert
+- [ ] Länderregeln lassen sich nicht über Sprache, URL oder Clientdaten umgehen
 - [ ] Datenschutz-Folgenabschätzung beziehungsweise dokumentierte Erforderlichkeitsprüfung abgeschlossen
 - [ ] Rechtsgrundlage und Informationspflichten dokumentiert
 - [ ] Lösch-, Widerspruchs- und Auskunftsprozess getestet
@@ -808,5 +743,8 @@ Diese Fragen blockieren die technische Kernumsetzung nicht, werden aber erst nac
 - [BfDI/DSK/VDA – Datenschutzrechtliche Aspekte bei der Nutzung vernetzter und nicht vernetzter Kraftfahrzeuge](https://www.bfdi.bund.de/SharedDocs/Pressemitteilungen/DE/2016/ErklaerungDSK_VDA_VernetzteKfz.html)
 - [DSK – Positionspapier zur audiovisuellen Umgebungserfassung, insbesondere Kriterien der Interessenabwägung](https://www.datenschutzkonferenz-online.de/media/dskb/DSK_Positionspapier_audiovisuelle_Umgebungserfassung.pdf)
 - [§ 185 StGB – Beleidigung, offizieller Gesetzestext](https://www.gesetze-im-internet.de/stgb/__185.html)
+- [DSGVO Art. 3 – räumlicher Anwendungsbereich, im offiziellen EUR-Lex-Gesamttext](https://eur-lex.europa.eu/legal-content/DE/TXT/HTML/?uri=CELEX:02016R0679-20160504)
+- [UK Information Commissioner – Autokennzeichen als möglicher indirekter Identifikator](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/personal-information-what-is-it/what-is-personal-data/can-we-identify-an-individual-indirectly/)
+- [Schweizer EDÖB – Auskunft, Berichtigung und Löschung personenbezogener Daten](https://www.edoeb.admin.ch/en/knowing-and-asserting-my-rights)
 
 Diese Spezifikation ist eine Produkt- und Umsetzungsvorgabe, keine Rechtsberatung. Die rechtlichen Launch-Gates sind verbindliche Projektanforderungen.
