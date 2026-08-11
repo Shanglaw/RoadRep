@@ -8,6 +8,10 @@
 
 ---
 
+> **⚠️ Hinweis zu dieser Fassung (nicht Teil der ursprünglichen Spezifikation):** Diese Fassung ist um ⚠️-Markierungen an Stellen mit rechtlicher Unsicherheit sowie um zwei neue Abschlussabschnitte ergänzt: **§23 Rechtsrisiko-Übersicht** und **§24 Abweichungen zwischen Spezifikation und aktuellem Prototyp**. Der ursprüngliche Spec-Text ab hier ist unverändert, nur ergänzt. Ersetzt keine Rechtsprüfung — siehe `legal/rechtspruefung-briefing.md`.
+
+---
+
 ## 1. Kurzfassung
 
 Die App ermöglicht es, ein Kfz-Kennzeichen exakt zu suchen und ausschließlich anhand fest vorgegebener Kategorien zu bewerten. Bewertet wird eine konkrete, selbst beobachtete Verkehrssituation – niemals die Persönlichkeit, Identität oder der vermeintliche Charakter des Fahrers. Ein Kennzeichen identifiziert außerdem nicht sicher die Person am Steuer: **Halter und Fahrer können unterschiedliche Personen sein.**
@@ -244,6 +248,8 @@ Diese Funktionen erhöhen das Risiko von Belästigung, Prangerwirkung oder Manip
 
 Die Verifizierung weist nur die aktuelle Berechtigung zur Verwaltung des Kennzeichenprofils nach. Sie beweist weder, wer bei vergangenen Beobachtungen gefahren ist, noch überträgt sie Rechte an Bewertungen einzelner Fahrer.
 
+> **⚠️ Rechtsrisiko R5 (siehe §23.5):** „Geeigneter Besitz-/Nutzungsnachweis nach dem rechtlich freigegebenen Verfahren" bleibt hier unbestimmt — kein konkretes Verfahren festgelegt. Ohne ein tatsächlich wirksames Verfahren bleibt die Flanke offen, dass ein fremdes Kennzeichen von einer nicht berechtigten Person beansprucht wird und deren Verhaltenshistorie an die falsche Person geht.
+
 ### 8.6 Flow F: Profil freiwillig öffentlich machen (P1)
 
 1. Nur ein verifizierter Berechtigter sieht die Option „Profil öffentlich machen“.
@@ -254,6 +260,8 @@ Die Verifizierung weist nur die aktuelle Berechtigung zur Verwaltung des Kennzei
 6. Nach Aktivierung wird ausschließlich die aggregierte Ansicht veröffentlicht.
 7. „Öffentliche Freigabe beenden“ verbirgt das Profil sofort; eine erneute Freigabe erfordert eine neue Bestätigung.
 8. Eine Kennzeichenveräußerung, Ummeldung, abgelaufene Verifizierung oder ein Widerspruch setzt den Zustand automatisch auf `PRIVATE` oder `SUSPENDED`.
+
+> **⚠️ Rechtsrisiko R1 (siehe §23.1):** Genau dieses Opt-in-Modell ist der Kern der offenen Frage aus dem fahrerbewertung.de-Präzedenzfall (OVG Münster, Az. 16 A 770/17, siehe §22 und `legal/rechtspruefung-briefing.md` §2). Freiwilligkeit und Widerrufbarkeit sind starke Argumente, ersetzen aber keine anwaltliche Bestätigung, dass das Modell den damaligen Prangervorwurf tatsächlich vermeidet.
 
 ### 8.7 Flow G: Melden oder widersprechen
 
@@ -320,6 +328,8 @@ Eine Kategorie wird nur aufgenommen, wenn:
 
 Kategorien ab negativer Stufe 3 gelten als sensibel. Sie werden auf einem Profil erst einzeln ausgewiesen, wenn mindestens drei voneinander unabhängige, gültige Beobachter dieselbe Kategorie innerhalb von 90 Tagen gemeldet haben. Bis dahin werden sie weder als Einzelvorwurf angezeigt noch für einen öffentlich sichtbaren Score verwendet.
 
+> **⚠️ Rechtsrisiko R6 (siehe §23.6):** Die Drei-Beobachter-Schwelle ist hier nur für die Anzeige „auf einem Profil" formuliert — nicht erkennbar auf öffentliche Profile beschränkt, aber auch nicht ausdrücklich für private Profile bestätigt. Unklar bleibt, ob eine einzelne, ggf. falsche sensible Meldung sofort im privaten Profil sichtbar wird, mit Persönlichkeitsrechts-/Verleumdungsrisiko, falls die Beobachtung unzutreffend ist.
+
 ---
 
 ## 10. RoadScore Version 1
@@ -327,6 +337,8 @@ Kategorien ab negativer Stufe 3 gelten als sensibel. Sie werden auf einem Profil
 ### 10.1 Ziel
 
 Der RoadScore fasst gewichtete Beobachtungen in einer verständlichen Zahl von 0 bis 100 zusammen. Eine einzelne Bewertung soll den Score nur begrenzt verändern. Viele aktuelle, voneinander unabhängige Beobachtungen sollen stärker wirken als wenige alte Beobachtungen.
+
+> **⚠️ Rechtsrisiko R2 (siehe §23.2):** Systematisches Scoring/Profiling einer (indirekt) identifizierbaren Person löst nach Art. 35 DSGVO tendenziell eine Pflicht-DSFA aus — unabhängig davon, ob der Score öffentlich sichtbar ist. Die reine Existenz des RoadScores im privaten Profil kann bereits DSFA-pflichtig sein, nicht erst die öffentliche Freigabe.
 
 ### 10.2 Eingangswerte
 
@@ -372,6 +384,8 @@ Eigenschaften:
 
 Der numerische RoadScore wird erst ab **fünf gültigen Beobachtungen von mindestens drei unabhängigen Konten** angezeigt. Vorher steht „Noch…1778 tokens truncated…profile,
 - gezielte Gegenseitigkeits- oder Vergeltungsmuster.
+
+> **⚠️ Rechtsrisiko R4 (siehe §23.4):** Die Kapitelnummerierung springt hier von §10 auf §13.3 — §11, §12 sowie §13.1–13.2 fehlen im Dokument. Genau in diesem Bereich würde man Kriterien für Missbrauchs-/Manipulationserkennung erwarten (worauf sich „gezielte Gegenseitigkeits- oder Vergeltungsmuster" unmittelbar bezieht). Eine Rechtsprüfung wird exakt hier nachfragen: Nach welchen Kriterien werden Fake-Konten, koordinierte Kampagnen oder Bot-Bewertungen erkannt? Diese Lücke sollte vor einer Rechtsprüfung inhaltlich geschlossen oder zumindest bewusst als „absichtlich offen" dokumentiert werden.
 
 ### 13.3 Reaktionen des Systems
 
@@ -443,6 +457,8 @@ Das Produkt benötigt klar erreichbare Prozesse für:
 
 Die konkrete rechtliche Anspruchsprüfung ist keine automatische Produktentscheidung, sondern Teil eines dokumentierten Datenschutzprozesses.
 
+> **⚠️ Rechtsrisiko R7 (siehe §23.7):** Das Auskunftsrecht der bewerteten Halterin/des bewerteten Halters (Art. 15 DSGVO) steht in Spannung zu §14.2, wonach beobachtende Nutzer:innen anonym bleiben sollen. Fordert ein Halter Auskunft über gespeicherte Beobachtungen an, stellt sich die ungeklärte Frage, wie viel über die beobachtende Person offengelegt werden muss beziehungsweise darf, ohne deren Anonymitätszusage zu brechen.
+
 ### 14.6 Aufbewahrungsvorschlag
 
 - gültige Beobachtungen: maximal 24 Monate, danach löschen oder vollständig anonymisieren,
@@ -508,6 +524,8 @@ Nach schriftlicher Freigabe werden nur die einzeln geprüften Werte aktiviert. D
 - Datum, Umfang und Verantwortlichen der rechtlichen Freigabe.
 
 Eine Länderfreigabe darf nicht durch Client-Manipulation, URL-Parameter, Sprachwahl oder Standortwechsel umgangen werden.
+
+> **⚠️ Rechtsrisiko R3 (siehe §23.3):** Das gesamte Mehrländer-Sicherheitsmodell hängt an einem einzigen Feld, `legal_review_version: "pending"` — die Spec beschreibt nicht, wer eine Version freigibt, nach welchen Kriterien, oder wie die Freigabe technisch geprüft beziehungsweise durchgesetzt wird (nur „serverseitig", ohne Mechanismus). Zusätzlich: `retention_days: 0` widerspricht als Default dem in §14.6 vorgeschlagenen Wert (24 Monate) — falls `0` „noch nicht freigegeben" bedeuten soll statt einer tatsächlichen Aufbewahrungsdauer, sollte das im Dokument klargestellt werden, damit es nicht als Widerspruch gelesen wird.
 
 ---
 
@@ -748,3 +766,42 @@ Diese Fragen blockieren die technische Kernumsetzung nicht, werden aber erst nac
 - [Schweizer EDÖB – Auskunft, Berichtigung und Löschung personenbezogener Daten](https://www.edoeb.admin.ch/en/knowing-and-asserting-my-rights)
 
 Diese Spezifikation ist eine Produkt- und Umsetzungsvorgabe, keine Rechtsberatung. Die rechtlichen Launch-Gates sind verbindliche Projektanforderungen.
+
+---
+
+## 23. Rechtsrisiko-Übersicht
+
+*Ergänzt am 11. August 2026, nicht Teil der ursprünglichen Spezifikation. Fasst die im Text mit ⚠️ markierten Stellen zusammen, sortiert nach Einschätzung der Dringlichkeit. Keine Rechtsberatung — eine Einschätzung, wo eine Rechtsprüfung genau hinschauen sollte, damit nichts davon erst beim Anwalt überrascht.*
+
+### 23.1 Öffentliches Opt-in-Profil nah am fahrerbewertung.de-Präzedenzfall
+**Bezug:** §8.6, §14.1. **Warum riskant:** OVG Münster (Az. 16 A 770/17, 2017) hat ein strukturell ähnliches Modell — Kennzeichen-Bewertungen für Dritte einsehbar — als Online-Pranger untersagt, der das allgemeine Persönlichkeitsrecht verletzt. Freiwilligkeit und Widerrufbarkeit unterscheiden RoadRep vom damaligen Modell, aber ob das rechtlich ausreicht, ist unbestätigt. **Das ist das Einzelrisiko mit der größten Tragweite** — es entscheidet, ob die öffentliche Profilfunktion überhaupt launchfähig ist.
+
+### 23.2 RoadScore kann unabhängig von Sichtbarkeit DSFA-pflichtig sein
+**Bezug:** §10.1. **Warum riskant:** Systematisches Scoring/Profiling einer indirekt identifizierbaren Person (Kennzeichen → Halter) ist nach EDSA-Kriterien ein typischer DSFA-Auslöser (Art. 35 DSGVO) — auch wenn der Score nie öffentlich sichtbar wird. Eine DSFA nur für die öffentliche Freigabe zu planen, könnte zu kurz greifen.
+
+### 23.3 Mehrländer-Freigabe hängt an einem einzigen ungeprüften Platzhalter
+**Bezug:** §14.9, §14.10. **Warum riskant:** `legal_review_version: "pending"` ist der einzige Mechanismus, der riskante Funktionen sperrt — die Spec definiert aber nicht, wer diesen Wert wie setzt oder prüft. Zusätzlich widerspricht der YAML-Default `retention_days: 0` dem in §14.6 empfohlenen Wert (24 Monate); vor der Rechtsprüfung klären, ob `0` „gesperrt" oder tatsächlich „keine Aufbewahrung" bedeuten soll.
+
+### 23.4 Fehlende Abschnitte §11, §12, §13.1–13.2 (Missbrauchs-/Manipulationserkennung)
+**Bezug:** Lücke zwischen §10.5 und §13.3. **Warum riskant:** Die Spezifikation ist an genau der Stelle unvollständig, an der ein:e Anwält:in typischerweise nachfragt: Wie wird koordinierte Rufschädigung, wie werden Fake-Konten oder Bot-Bewertungen erkannt? §13.3 spricht bereits von „Reaktionen des Systems" auf Muster, die vorher nie definiert wurden. Das ist eine inhaltliche Lücke im Dokument selbst, nicht nur ein Formatierungsfehler — vor einer Rechtsprüfung entweder füllen oder bewusst als offenen Punkt vermerken.
+
+### 23.5 Besitznachweis-Verfahren ist nicht konkretisiert
+**Bezug:** §8.5. **Warum riskant:** „Geeigneter Besitz-/Nutzungsnachweis nach dem rechtlich freigegebenen Verfahren" legt kein konkretes Verfahren fest. Ohne wirksamen Nachweis bleibt die Möglichkeit offen, dass jemand ein fremdes Kennzeichen beansprucht und dadurch Zugriff auf dessen Verhaltenshistorie samt Steuerungsrechten (öffentlich machen, widersprechen) erhält. Vertiefend dazu: `legal/rechtspruefung-briefing.md` §5 zum angedachten Scan-und-nicht-speichern-Verfahren.
+
+### 23.6 Schwelle für sensible Kategorien nicht eindeutig auf privat/öffentlich bezogen
+**Bezug:** §9.4. **Warum riskant:** Die Drei-Beobachter-90-Tage-Schwelle ist nur für „ein Profil" formuliert. Bleibt offen, ob eine einzelne, unter Umständen unzutreffende sensible Beobachtung sofort im privaten Profil sichtbar wird — mit entsprechendem Verleumdungs-/Persönlichkeitsrechtsrisiko gegenüber dem Halter.
+
+### 23.7 Spannung zwischen Auskunftsrecht des Halters und Anonymität der beobachtenden Person
+**Bezug:** §14.2 vs. §14.5. **Warum riskant:** Der Halter hat ein Auskunftsrecht (Art. 15 DSGVO) über die zu ihm gespeicherten Beobachtungen; §14.2 will beobachtende Nutzer:innen aber anonym halten. Wie eine Auskunft beantwortet wird, ohne die beobachtende Person zu deanonymisieren, ist nicht geklärt.
+
+---
+
+## 24. Abweichungen zwischen Spezifikation und aktuellem Prototyp
+
+*Ergänzt am 11. August 2026. Das hier sind **keine Rechtsrisiken**, sondern Stellen, an denen der Klick-Prototyp (`prototype/index.html`) inzwischen von diesem Dokument abweicht. Relevant, damit eine Rechtsprüfung nicht versehentlich den Spec-Text statt des tatsächlich gebauten Verhaltens bewertet.*
+
+- **§8.1 Länderwahl:** Spec beschreibt eine manuelle Länderwahl beim Suchen; der Prototyp erkennt das Land automatisch aus dem Kennzeichenformat.
+- **§8.2, Schritt 4 „Nutzer wählt genau eine Kategorie":** Der Prototyp erlaubt inzwischen Mehrfachauswahl über positiv/neutral/negativ hinweg in einem Schritt (auf ausdrücklichen Nutzerwunsch). Diese Abweichung ist eine bewusste Produktentscheidung dieser Session, noch nicht im Spec-Text nachgezogen.
+- **Freunde-Feature (gegenseitige private Sichtbarkeit):** Komplett neu, kommt in der Spezifikation nicht vor.
+- **Fahrzeugschein-Bestätigung als Checkbox:** Konkretisiert den in §8.5 offen gelassenen „geeigneten Besitz-/Nutzungsnachweis" durch eine Selbstauskunfts-Checkbox — eine von vielen möglichen Umsetzungen, nicht in der Spec festgelegt und nicht mit einer der in §23.5 genannten Rechtsfragen abgeglichen.
+- **Moderations-Zugang über einen Demo-Code:** Der Prototyp nutzt einen einzelnen geteilten Zugangscode (`RR-MOD-2024`) statt echter rollenbasierter Konten, wie sie ein produktives Moderationssystem voraussetzen würde. Ausdrücklich als Demo-Notlösung gekennzeichnet, nicht als Sicherheitsmodell gedacht.
