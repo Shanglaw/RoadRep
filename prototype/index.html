@@ -842,7 +842,10 @@
           ? { loaded: true, found: true, display: res.data.display_plate, country: res.data.country_code }
           : { loaded: true, found: false };
       }).catch(function(err){
-        userPlatePreview[userId] = { loaded: true, found: false, errorMessage: (err && err.message) || String(err) };
+        // Eigener error-Zweig statt found:false (wie ensurePlateLoaded() oben) - sonst ist ein echtes
+        // "kein Kennzeichen verifiziert" nicht von einem RPC-Fehler unterscheidbar (siehe get_invite_preview
+        // Debugging: 0006-Migration fehlte, Fehler wurde hier bisher als "found:false" maskiert).
+        userPlatePreview[userId] = { loaded: true, found: false, error: true, errorMessage: (err && err.message) || String(err) };
       }).then(function(){
         delete previewFetchInFlight[userId];
         render();
@@ -1577,7 +1580,7 @@
     var rows = outgoing.map(function(l){
       var preview = ensureUserPreviewLoaded(l.to);
       var found = preview.loaded && preview.found;
-      var label = found ? preview.display : (preview.loaded ? "Kennzeichen nicht mehr auffindbar" : "Lädt …");
+      var label = found ? preview.display : (preview.error ? "Vorschau nicht ladbar (Fehler)" : (preview.loaded ? "Kennzeichen nicht mehr auffindbar" : "Lädt …"));
       var country = found ? preview.country : "DE";
       var mutual = isMutualFriend(l.to);
       var statusChip = mutual
@@ -1597,7 +1600,7 @@
     var incomingRows = incoming.map(function(l){
       var preview = ensureUserPreviewLoaded(l.from);
       var found = preview.loaded && preview.found;
-      var label = found ? preview.display : (preview.loaded ? "Kennzeichen nicht mehr auffindbar" : "Lädt …");
+      var label = found ? preview.display : (preview.error ? "Vorschau nicht ladbar (Fehler)" : (preview.loaded ? "Kennzeichen nicht mehr auffindbar" : "Lädt …"));
       var country = found ? preview.country : "DE";
       return '<div class="row" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--sp-3);">' +
         '<div class="row" style="gap:var(--sp-3); align-items:center;">'+plateChip(label,null,country)+'<span class="chip chip-muted">Möchte sich verbinden</span></div>' +
@@ -1650,6 +1653,11 @@
       return '<div class="stack"><h1>Einladungslink</h1><div class="card stack"><p style="color:var(--ink-muted)">Lade …</p></div></div>';
     }
     if (!preview.found) {
+      if (preview.error) {
+        return '<div class="stack"><h1>Einladungslink</h1>' +
+          '<div class="callout warn">Vorschau konnte nicht geladen werden: '+esc(preview.errorMessage||"Unbekannter Fehler")+'</div>' +
+          '<a class="btn btn-secondary" href="#/search">Zur Suche</a></div>';
+      }
       return '<div class="stack"><h1>Einladungslink</h1>' +
         '<div class="callout warn">Diese Person hat noch kein Kennzeichen verifiziert — der Link funktioniert erst danach.</div>' +
         '<a class="btn btn-secondary" href="#/search">Zur Suche</a></div>';
