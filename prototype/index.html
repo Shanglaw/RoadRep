@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>RoadRep — Prototyp</title>
+<title>RoadRep</title>
 <style>
   /* ============ Tokens ============ */
   :root {
@@ -171,15 +171,6 @@
     .start-hero { flex-direction:column; align-items:flex-start; gap: var(--sp-3); }
     .start-hero .start-icon { width:56px; height:56px; }
   }
-  .topbar .demo-flag {
-    margin-left: auto;
-    display:flex; align-items:center; gap: var(--sp-2);
-    font-size: var(--fs-2xs); color: var(--accent-strong);
-    background: var(--accent-soft); border: 1px solid var(--accent);
-    padding: 5px 10px; border-radius: var(--radius-pill); font-weight: 700; letter-spacing:.03em;
-    white-space: nowrap;
-  }
-  .topbar .demo-flag .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none; }
 
   nav.mainnav {
     grid-area: nav;
@@ -390,7 +381,6 @@
         <span class="brand-tagline">Bewerte die Fahrt. Nicht den Fahrer.</span>
       </span>
     </a>
-    <div class="demo-flag"><span class="dot"></span> PROTOTYP · Beispieldaten</div>
   </header>
 
   <nav class="mainnav" id="mainnav" aria-label="Hauptnavigation"></nav>
@@ -447,90 +437,15 @@
   ];
   var catByKey = {}; CATEGORIES.forEach(function(c){ catByKey[c.key]=c; });
 
-  var STORE_KEY = "roadrep_prototype_v1";
   var DAY = 86400000;
   var now = function(){ return Date.now(); };
   var daysAgo = function(n){ return now() - n*DAY; };
   var TRANSFER_WINDOW_DAYS = 14; // Widerspruchsfrist für die aktuell verifizierte Person bei einer Übernahme-Anfrage
   function fmtDate(ts){ return new Date(ts).toLocaleDateString("de-DE"); }
 
-  function seedState(){
-    var accA="acc-a", accB="acc-b", accC="acc-c", accD="acc-d", accE="acc-e", accF="acc-f";
-    function obs(cat, acc, ageDays){ return {id: cat+"-"+acc+"-"+ageDays, categoryKey: cat, accountId: acc, createdAt: daysAgo(ageDays)}; }
-    return {
-      currentUser: { id: "demo-user", myPlateKey: null },
-      // Gerichtet: {from} hat {to} als Freund hinzugefügt. Erst wenn BEIDE Richtungen existieren
-      // (from→to UND to→from), gilt die Freundschaft als gegenseitig und schaltet das private Profil
-      // frei — siehe isMutualFriend(). Dieser Demo-Eintrag simuliert, dass "acc-f" (Halterin von
-      // B-FR 9001) das Demo-Konto bereits hinzugefügt hat, damit der Rückweg sofort testbar ist.
-      friendLinks: [
-        { from: accF, to: "demo-user", requestedAt: daysAgo(30), consentedAt: daysAgo(30) }
-      ],
-      // Demo-Meldungen für das Moderations-Panel (§7.2/§14.4 der Spec) — eine offene (noch keine
-      // Entscheidung) und eine bereits geschlossene (mit Audit-Protokoll-Eintrag), damit beide
-      // Zustände beim ersten Öffnen sichtbar sind.
-      reports: [
-        {
-          id: "RR-DEMO01", plateNorm: "KAB550", plateDisplay: "K-AB 550", plateCountry: "DE",
-          reason: "Manipulationsverdacht", text: "Score wirkt ungewöhnlich hoch für so wenige Tage — evtl. abgesprochene Bewertungen.",
-          reportedBy: accA, createdAt: daysAgo(2), status: "open", decisions: []
-        },
-        {
-          id: "RR-DEMO00", plateNorm: "FZZ42", plateDisplay: "F-ZZ 42", plateCountry: "DE",
-          reason: "Falsches Kennzeichen", text: "Vermutlich falsch abgetippt gemeldet.",
-          reportedBy: accB, createdAt: daysAgo(10), status: "closed",
-          decisions: [ { by: "mod-demo", at: daysAgo(9), action: "dismiss", note: "Kennzeichenformat geprüft, Eingabe korrekt." } ]
-        }
-      ],
-      plates: {
-        "MRX1234": {
-          display: "M-RX 1234", country: "DE", publicOptIn: false, publicOptInAt: null,
-          observations: [
-            obs("considerate_driving", accA, 4), obs("keeps_distance", accB, 9),
-            obs("signals_well", accC, 16), obs("lets_merge", accD, 24),
-            obs("safe_bicycle_distance", accE, 33), obs("parks_well", accA, 47),
-            obs("unusually_slow", accB, 55), obs("no_signal", accC, 61),
-            obs("tailgating", accD, 70), obs("considerate_driving", accE, 88),
-            obs("phone_distraction", accA, 12)
-          ]
-        },
-        "KAB550": {
-          display: "K-AB 550", country: "DE", publicOptIn: true, publicOptInAt: daysAgo(120),
-          observations: [
-            obs("keeps_distance", accA, 3), obs("considerate_driving", accB, 8),
-            obs("emergency_lane", accC, 14), obs("lets_merge", accD, 21),
-            obs("keeps_distance", accE, 29), obs("signals_well", accA, 40),
-            obs("helped_road_user", accB, 58), obs("parks_well", accC, 66),
-            obs("late_at_light", accD, 77)
-          ]
-        },
-        "FZZ42": {
-          // Bereits von einem fremden (simulierten) Konto verifiziert — Demo-Beispiel für den
-          // Übernahme-/Blockier-Flow bei bereits verifizierten Kennzeichen (Halterwechsel-Fall).
-          display: "F-ZZ 42", country: "DE", publicOptIn: false, publicOptInAt: null,
-          verifiedBy: accC, verifiedAt: daysAgo(200),
-          observations: [ obs("clearly_too_fast", accA, 5), obs("no_signal", accB, 40) ]
-        },
-        "BFR9001": {
-          // Verifiziert von "acc-f", die das Demo-Konto in friendLinks bereits als Freund
-          // hinzugefügt hat — Demo-Beispiel für den Freundschaftsflow (gegenseitige private
-          // Sichtbarkeit ohne öffentliche Freigabe).
-          display: "B-FR 9001", country: "DE", publicOptIn: false, publicOptInAt: null,
-          verifiedBy: accF, verifiedAt: daysAgo(60),
-          observations: [
-            obs("keeps_distance", accA, 6), obs("considerate_driving", accB, 18),
-            obs("signals_well", accC, 25), obs("lets_merge", accD, 34)
-          ]
-        }
-      }
-    };
-  }
-
-  // loadState()/seedState() (Demo-Daten in localStorage) sind mit der Supabase-Migration
-  // abgelöst -- siehe bootstrapState() weiter unten. saveState() bleibt vorerst als
-  // wirkungsloser Stub stehen, falls ein noch nicht umgestellter Aufrufpfad ihn trifft;
-  // die eigentliche Persistenz läuft jetzt über gezielte db.from(...)/db.rpc(...)-Aufrufe.
-  function saveState(s){}
+  // loadState()/seedState()/saveState() (Demo-Daten + localStorage-Persistenz) sind mit der
+  // Supabase-Migration vollständig abgelöst -- siehe bootstrapState() weiter unten sowie die
+  // gezielten db.from(...)/db.rpc(...)-Aufrufe an den jeweiligen Schreibstellen.
 
   var state = null; // erst nach erfolgreichem Login durch bootstrapState() befüllt
 
@@ -1544,7 +1459,7 @@
           '<input type="checkbox" id="chk-fahrzeugschein"/>' +
           '<span style="font-size:var(--fs-sm);">Ich bestätige, dass ich eine gültige Zulassungsbescheinigung Teil I (Fahrzeugschein) für dieses Kennzeichen besitze und im echten System hochladen würde. (Demo: wird hier nicht wirklich hochgeladen oder geprüft.)</span>' +
         '</label>' +
-        '<button class="btn btn-primary btn-block" id="btn-claim" disabled>Als meins verifizieren (Demo)</button>' +
+        '<button class="btn btn-primary btn-block" id="btn-claim" disabled>Als meins verifizieren</button>' +
         '<p style="font-size:var(--fs-2xs); color:var(--ink-faint); margin:0;">Verifizierung legt das Kennzeichen in der echten Datenbank an, falls es dort noch nicht existiert.</p>' +
       '</div>' +
     '</div>';
@@ -1696,9 +1611,9 @@
         }).join("") +
       '</div>' +
       '<details class="helpbox card">' +
-        '<summary>Über diesen Prototyp</summary>' +
+        '<summary>Über RoadRep</summary>' +
         '<div class="stack">' +
-          '<p>Dies ist ein rein clientseitiger Klick-Demo-Prototyp auf Basis von <code>PRODUKTSPEZIFIKATION.md</code> (v1.1). Es gibt keinen Server, keine echte Verifizierung, keine echten Accounts. Alle Daten liegen nur in deinem Browser (localStorage).</p>' +
+          '<p>RoadRep basiert auf <code>PRODUKTSPEZIFIKATION.md</code> (v1.1). Anmeldung per Magic-Link (E-Mail, kein Passwort), alle Daten liegen in einer echten Datenbank (Supabase, Frankfurt) mit Row-Level-Security als Zugriffsgrenze — nicht im Browser.</p>' +
           '<p style="color:var(--ink-muted); margin:0;">Markenbild (Icon, Farben) übernommen aus <code>assets/brand/</code> im Repo. Das vollständige Logo-Lockup (Icon + Schriftzug) liegt zusätzlich unter <code>assets/brand/logo-560.png</code> im Projektordner für spätere Verwendung (z. B. Store-Icon, Marketing).</p>' +
           '<div class="review-item"><strong>Behoben (11. August 2026):</strong> Abschnitte 10.5 (Rest), 11, 12, 13.1–13.2 fehlten zwischenzeitlich in der Quelldatei (ein Tool-Output-Platzhalter war versehentlich in einen früheren Commit gerutscht) und wurden aus der Git-Historie wiederhergestellt. Die Vertrauensstufen-Labels hier (Vorläufig / Wachsende Datenbasis / Breite Datenbasis, ab 5/15/50 gültigen Beobachtungen) folgen jetzt exakt §10.5.</div>' +
           '<div class="review-item"><strong>Entschieden (11. August 2026):</strong> Die 3-Beobachter-Schwelle für sensible Kategorien (§9.4) gilt jetzt ausdrücklich für jedes Profil — privat, Freunde-Ansicht und öffentlich gleichermaßen, nicht nur für den öffentlichen Score. Vorher wurde sie in diesem Prototyp nur öffentlich angewendet.</div>' +
