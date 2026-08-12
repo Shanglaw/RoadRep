@@ -351,6 +351,9 @@ BEGIN
     'country_code', v_plate.country_code,
     'visible', true,
     'tier', v_tier,
+    'is_actual_owner', v_is_owner, -- getrennt von tier='owner', das auch Moderatoren einschliesst -
+                                    -- der Client darf Eigentümer-Steuerelemente (Opt-in-Button etc.)
+                                    -- nur zeigen, wenn dies wirklich true ist, nicht schon bei tier='owner'.
     'public_opt_in', v_plate.public_opt_in,
     'public_opt_in_at', v_plate.public_opt_in_at,
     'verified', v_plate.verified_by IS NOT NULL,
