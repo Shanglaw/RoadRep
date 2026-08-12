@@ -784,7 +784,7 @@
     }
     return {
       loaded: true, visible: true, tier: data.tier, isActualOwner: !!data.is_actual_owner,
-      display: data.display_plate, country: data.country_code,
+      id: data.id, display: data.display_plate, country: data.country_code,
       publicOptIn: data.public_opt_in, publicOptInAt: data.public_opt_in_at,
       verified: data.verified, moderationHidden: data.moderation_hidden, moderationBlocked: data.moderation_blocked,
       agg: {
@@ -881,6 +881,12 @@
     unblock: "Sperrung aufgehoben"
   };
   function modActionLabel(action){ return MOD_ACTION_LABELS[action] || action; }
+  // state.reports ist seit Phase 6.6 eine reine Demo-Attrappe: openReportModal() legt Fälle jetzt
+  // wirklich in moderation_cases an (echte Fallnummer vom Server), schreibt aber NICHT mehr hierhin -
+  // ein neu gemeldeter Fall taucht also unten in diesem Demo-Panel nicht auf. Bewusst nicht synchron
+  // gehalten, um keine zweite, potenziell abweichende Kopie zu pflegen; das ganze Panel (inkl.
+  // MOD_DEMO_CODE/modAuthed) wird mit Phase 6.7 durch einen echten db.from('moderation_cases')-Load
+  // ersetzt statt hier halbfertig geflickt zu werden.
   function getReport(caseId){ return (state.reports||[]).filter(function(r){ return r.id===caseId; })[0]; }
 
   // Jede Entscheidung wird protokolliert (§14.4: "fester Grundcode, Zeit, Bearbeiter, Ergebnis") —
@@ -2218,6 +2224,7 @@
     // Formular rein dekorativ.
     var plateObj = getPlate(norm);
     var display = (plateObj && plateObj.display) || norm;
+    if (!plateObj || !plateObj.id) { toast("Profil noch nicht geladen — bitte kurz warten und erneut versuchen."); return; }
     openModal(
       '<h3 id="modal-title">Profil oder Ergebnis melden</h3>' +
       '<p style="color:var(--ink-muted); font-size:var(--fs-sm);">Kennzeichen: '+plateChip(display)+'<br/>Wähle einen Grund. Freitext wird nur im privaten Support-Kanal gelesen und nie veröffentlicht.</p>' +
@@ -2244,20 +2251,24 @@
         var reasonSel = document.getElementById("report-reason");
         reasonSel.focus();
         document.getElementById("modal-cancel").addEventListener("click", closeModal);
-        document.getElementById("modal-send").addEventListener("click", function(){
+        var sendBtn = document.getElementById("modal-send");
+        sendBtn.addEventListener("click", function(){
           var reason = reasonSel.value;
           var text = document.getElementById("report-text").value.trim();
-          var caseId = "RR-" + now().toString(36).toUpperCase().slice(-6);
-          state.reports = state.reports || [];
-          state.reports.push({
-            id: caseId, plateNorm: norm, plateDisplay: display,
-            plateCountry: (plateObj && plateObj.country) || "DE",
-            reason: reason, text: text, reportedBy: state.currentUser.id,
-            createdAt: now(), status: "open", decisions: []
+          sendBtn.disabled = true;
+          // moderation_cases_insert_authenticated (0003_rls.sql) verlangt reported_by = auth.uid() explizit
+          // im INSERT - kein Trigger füllt das automatisch. case_number wird serverseitig per DEFAULT
+          // generiert (0001_schema.sql), deshalb .select() um sie zurückzubekommen statt selbst zu raten.
+          db.from("moderation_cases").insert({
+            plate_id: plateObj.id, reason: reason, description: text || null, reported_by: state.currentUser.id
+          }).select("case_number").single().then(function(res){
+            if (res.error) throw res.error;
+            closeModal();
+            toast("Fallnummer "+res.data.case_number+" angefordert — Grund: "+reason+" ("+display+").");
+          }).catch(function(err){
+            toast("Fehler: " + ((err && err.message) || String(err)));
+            sendBtn.disabled = false;
           });
-          saveState(state);
-          closeModal();
-          toast("Fallnummer "+caseId+" angefordert — Grund: "+reason+" ("+display+"). Demo: wird nicht wirklich versendet.");
         });
       }
     );
