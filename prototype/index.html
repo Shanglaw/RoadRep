@@ -776,9 +776,8 @@
   }
 
   // Bildet die JSON-Antwort von get_plate_profile() (0004_functions.sql) auf die Feldnamen ab, die
-  // renderProfile() erwartet. Die Funktion ist die einzige RoadScore-Quelle (SSOT) - computeAggregate()
-  // wird für ferngeladene Profile nicht mehr verwendet (bleibt vorerst nur für openOptInModal()s
-  // Vorschau stehen, siehe Kommentar dort - vollständige Entfernung folgt mit Phase 6.5).
+  // renderProfile() erwartet. Die Funktion ist die einzige RoadScore-Quelle (SSOT, computeAggregate()
+  // wurde mit Phase 6.5 entfernt).
   function mapPlateProfile(data){
     if (!data.visible) {
       return { loaded: true, visible: false, reason: data.reason, display: data.display_plate || null, country: data.country_code || null };
@@ -905,70 +904,16 @@
   }
 
   /* ---------- RoadScore-Formel (Spec §10.3 / §10.4) ---------- */
-  var HALFLIFE_DAYS = 180;
-  var PRIOR = 10;
+  // decay()/sensitiveEligible()/computeAggregate() sind mit Phase 6.5 entfernt: die eigentliche
+  // RoadScore-Berechnung liegt komplett serverseitig in get_plate_profile() (0004_functions.sql, SSOT,
+  // exakt dieselbe Formel). Letzter Client-Aufrufer war openOptInModal()s Vorschau, die jetzt den
+  // bereits vom Server geladenen agg-Wert wiederverwendet statt ihn ein zweites Mal zu berechnen - der
+  // Score ist tierunabhängig (get_plate_profile() wendet dieselbe Formel für owner/friend/public an),
+  // die Vorschau als Eigentümer entspricht also exakt dem, was nach der Freigabe öffentlich sichtbar wäre.
+  // MIN_OBS/MIN_ACCOUNTS bleiben nur für den "Noch nicht genügend Daten"-Hinweistext in renderProfile()
+  // stehen (§10.3).
   var MIN_OBS = 5;
   var MIN_ACCOUNTS = 3;
-  var SENSITIVE_ACCOUNTS_REQUIRED = 3;
-  var SENSITIVE_WINDOW_DAYS = 90;
-
-  function decay(ageDays){ return Math.pow(0.5, ageDays/HALFLIFE_DAYS); }
-
-  // Gilt seit Spec-Update vom 11. August 2026 (§9.4) fuer JEDES Profil (privat, Freunde, oeffentlich) gleichermassen -
-  // vorher nur fuer scope "public" angewendet, was der damals unklaren Spec-Formulierung entsprach.
-  function sensitiveEligible(o, allObs){
-    var cat = catByKey[o.categoryKey];
-    if (!cat || !cat.sensitive) return true;
-    var t = now();
-    var accs = {};
-    allObs.forEach(function(x){
-      if (x.categoryKey === o.categoryKey && (t - x.createdAt) <= SENSITIVE_WINDOW_DAYS*DAY) accs[x.accountId]=true;
-    });
-    return Object.keys(accs).length >= SENSITIVE_ACCOUNTS_REQUIRED;
-  }
-
-  function computeAggregate(plateObj, opts){
-    opts = opts || {};
-    var all = plateObj.observations || [];
-    var eligible = all.filter(function(o){ return sensitiveEligible(o, all); });
-    var accounts = {}; eligible.forEach(function(o){ accounts[o.accountId]=true; });
-    var accountCount = Object.keys(accounts).length;
-    var weightedSum = 0, evidence = 0;
-    var dist = { positiv:0, neutral:0, negativ:0 };
-    var t = now();
-    eligible.forEach(function(o){
-      var cat = catByKey[o.categoryKey]; if (!cat) return;
-      var ageDays = (t - o.createdAt)/DAY;
-      var d = decay(ageDays);
-      weightedSum += cat.weight * d;
-      evidence += Math.abs(cat.weight) * d;
-      dist[cat.type] = (dist[cat.type]||0) + 1;
-    });
-    var raw = 50 + 50 * weightedSum / (PRIOR + evidence);
-    var score = Math.round(Math.max(0, Math.min(100, raw)));
-    var enoughData = eligible.length >= MIN_OBS && accountCount >= MIN_ACCOUNTS;
-
-    // Stufen aus der (wiederhergestellten) Spec §10.5: Niedrig 5-14, Mittel 15-49, Hoch ab 50 gueltige Beobachtungen.
-    var trust = "Kein Score";
-    if (enoughData) {
-      if (eligible.length >= 50) trust = "Breite Datenbasis";
-      else if (eligible.length >= 15) trust = "Wachsende Datenbasis";
-      else trust = "Vorläufig";
-    }
-
-    var catCounts = {};
-    eligible.forEach(function(o){ catCounts[o.categoryKey] = (catCounts[o.categoryKey]||0)+1; });
-    var topCats = Object.keys(catCounts).map(function(k){ return {key:k, count:catCounts[k]}; })
-      .sort(function(a,b){ return b.count-a.count; }).slice(0,5);
-
-    var oldest = eligible.reduce(function(min,o){ return Math.min(min,o.createdAt); }, t);
-
-    return {
-      score: score, enoughData: enoughData, trust: trust, accountCount: accountCount,
-      validCount: eligible.length, totalCount: all.length, dist: dist, topCats: topCats,
-      periodDays: enoughData ? Math.round((t-oldest)/DAY) : null
-    };
-  }
 
   /* ============================================================
      UI Helpers
@@ -1867,16 +1812,28 @@
     // Ergebnis: melden / öffentlich machen / widerrufen
     var reportBtn = document.getElementById("btn-report");
     if (reportBtn) reportBtn.addEventListener("click", function(){ openReportModal(reportBtn.getAttribute("data-plate")); });
-    // Öffentliches Opt-in/Widerruf ist noch nicht auf Supabase umgestellt (Phase 6.5, folgt) -
-    // openOptInModal()/die alte Widerruf-Logik würden nur den lokalen Mirror ändern und einen Erfolg
-    // vortäuschen, der nach einem Reload wieder weg wäre. Lieber ehrlich "noch nicht" sagen als das.
     var mkPublic = document.getElementById("btn-make-public");
-    if (mkPublic) mkPublic.addEventListener("click", function(){
-      toast("Öffentliche Freigabe wird gerade auf die neue Datenbank umgestellt — in Kürze wieder verfügbar.");
-    });
+    if (mkPublic) mkPublic.addEventListener("click", function(){ openOptInModal(); });
     var revoke = document.getElementById("btn-revoke-public");
     if (revoke) revoke.addEventListener("click", function(){
-      toast("Widerruf wird gerade auf die neue Datenbank umgestellt — in Kürze wieder verfügbar.");
+      var norm = mine_or_result_norm();
+      var plateObj = getPlate(norm);
+      if (!plateObj || !plateObj.hash) return;
+      revoke.disabled = true;
+      // Direktes UPDATE statt RPC (plates_update_owner-Policy), analog zu btn-unclaim. Bewusst ohne
+      // eigenes Modal — Widerruf ist die "weniger tun"-Richtung, dafür braucht es keine erneute
+      // Zustimmungsabfrage (anders als das erstmalige Veröffentlichen in openOptInModal()).
+      db.from("plates").update({
+        public_opt_in: false, public_opt_in_at: null, public_opt_in_consent_text: null
+      }).eq("lookup_hash", plateObj.hash).then(function(res){
+        if (res.error) throw res.error;
+        delete state.plates[norm];
+        toast("Öffentliche Freigabe beendet.");
+        render();
+      }).catch(function(err){
+        toast("Fehler: " + ((err && err.message) || String(err)));
+        revoke.disabled = false;
+      });
     });
 
     // Bewerten: plate input step
@@ -2314,7 +2271,12 @@
   function openOptInModal(route){
     var norm = mine_or_result_norm();
     var plateObj = getPlate(norm);
-    var agg = computeAggregate(plateObj, {scope:"public"});
+    // plateObj kommt bereits fertig geladen von get_plate_profile() (ensurePlateLoaded() lief vorher
+    // für dieses Profil, sonst gäbe es den auslösenden Button gar nicht) - .agg ist derselbe Score, der
+    // nach der Freigabe auch öffentlich sichtbar wäre (Formel ist tierunabhängig, siehe Kommentar bei
+    // MIN_OBS oben), .hash ist der lookup_hash für das UPDATE unten.
+    if (!plateObj || !plateObj.hash) { toast("Profil noch nicht geladen — bitte kurz warten und erneut versuchen."); return; }
+    var agg = plateObj.agg;
     openModal(
       '<h3 id="modal-title">Profil öffentlich machen</h3>' +
       '<p style="color:var(--ink-muted); font-size:var(--fs-sm);">Vorschau der Daten, die künftig öffentlich sichtbar wären:</p>' +
@@ -2337,14 +2299,24 @@
         var confirmBtn = document.getElementById("modal-confirm-optin");
         chk.addEventListener("change", function(){ confirmBtn.disabled = !chk.checked; });
         confirmBtn.addEventListener("click", function(){
-          plateObj.publicOptIn = true;
-          plateObj.publicOptInAt = now();
-          // Zustimmungstext wird mitgespeichert (nicht nur ein Boolean+Zeitstempel) — belegt, WOZU
-          // genau zugestimmt wurde, falls der Text später verändert wird.
-          plateObj.publicOptInConsentText = PUBLIC_OPTIN_CONSENT_TEXT;
-          saveState(state);
-          closeModal(); toast("Profil ist jetzt öffentlich sichtbar.");
-          render();
+          confirmBtn.disabled = true;
+          // Direktes UPDATE statt RPC: durch die plates_update_owner-Policy (0003_rls.sql) gedeckt, nur
+          // der Eigentümer selbst darf seine eigene Zeile so ändern. Zustimmungstext wird mitgespeichert
+          // (nicht nur ein Boolean+Zeitstempel) — belegt, WOZU genau zugestimmt wurde, falls der Text
+          // später verändert wird.
+          db.from("plates").update({
+            public_opt_in: true,
+            public_opt_in_at: new Date().toISOString(),
+            public_opt_in_consent_text: PUBLIC_OPTIN_CONSENT_TEXT
+          }).eq("lookup_hash", plateObj.hash).then(function(res){
+            if (res.error) throw res.error;
+            delete state.plates[norm]; // Mirror invalidieren -> frisch nachladen
+            closeModal(); toast("Profil ist jetzt öffentlich sichtbar.");
+            render();
+          }).catch(function(err){
+            confirmBtn.disabled = false;
+            toast("Fehler: " + ((err && err.message) || String(err)));
+          });
         });
       }
     );
