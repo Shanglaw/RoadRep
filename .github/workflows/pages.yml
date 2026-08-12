@@ -6,6 +6,7 @@ name: Deploy GitHub Pages
 # https://<user>.github.io/<repo>/ ohne zusaetzliches /prototype/-Segment.
 
 on:
+  # Re-trigger nach Source-Umstellung auf GitHub Actions in den Pages-Settings
   push:
     branches: [main]
     paths:
