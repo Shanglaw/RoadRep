@@ -437,9 +437,7 @@
   ];
   var catByKey = {}; CATEGORIES.forEach(function(c){ catByKey[c.key]=c; });
 
-  var DAY = 86400000;
   var now = function(){ return Date.now(); };
-  var daysAgo = function(n){ return now() - n*DAY; };
   var TRANSFER_WINDOW_DAYS = 14; // Widerspruchsfrist für die aktuell verifizierte Person bei einer Übernahme-Anfrage
   function fmtDate(ts){ return new Date(ts).toLocaleDateString("de-DE"); }
 
@@ -2119,9 +2117,8 @@
       });
     });
 
-    // War früher "Demo-Daten zurücksetzen" (seedState()) - das würde jetzt den echten, aus Supabase
-    // geladenen state komplett durch lokale Phantasiedaten ersetzen und die Sitzung zerschießen. Lädt
-    // stattdessen den eigenen echten Stand neu.
+    // Lädt den eigenen Stand frisch aus Supabase neu (kein lokaler Demo-Reset mehr, siehe Kommentar
+    // bei bootstrapState()).
     var resetBtn = document.getElementById("btn-reset-demo");
     if (resetBtn) resetBtn.addEventListener("click", function(){
       resetBtn.disabled = true;
