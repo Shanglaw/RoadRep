@@ -1,0 +1,42 @@
+name: Deploy GitHub Pages
+
+# Veroeffentlicht gezielt nur prototype/ als Pages-Site (nicht den ganzen Repo-Root) - der
+# einfache "Deploy from a branch"-Modus in den Pages-Settings erlaubt dafuer nur / oder /docs
+# als Ordner, kein /prototype. Der Artifact-Root wird zum Site-Root, die URL bleibt also
+# https://<user>.github.io/<repo>/ ohne zusaetzliches /prototype/-Segment.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'prototype/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'prototype'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
