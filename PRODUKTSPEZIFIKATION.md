@@ -272,22 +272,23 @@ Die Verifizierung weist nur die aktuelle Berechtigung zur Verwaltung des Kennzei
 3. Freitext wird nur in einem privaten Supportkanal zugelassen und niemals veröffentlicht.
 4. Das System vergibt eine Fallnummer und setzt je nach Risiko Sichtbarkeit oder Score-Verarbeitung vorläufig aus.
 5. Ein Moderator entscheidet anhand dokumentierter Regeln.
+6. Der Antragsteller erhält eine knappe Entscheidung und einen Eskalationsweg.
 
 ### 8.8 Flow H: Freunde – gegenseitige private Sichtbarkeit (P1)
 
 *Ergänzt am 11. August 2026 — Feature existiert bereits im Prototyp, war zuvor nicht in der Spezifikation dokumentiert.*
 
 1. Ein verifizierter Nutzer schlägt einer anderen Person über deren verifiziertes Kennzeichen eine Verbindung vor.
-2. Die Verbindung besteht zunächst nur einseitig und hat keine Sichtbarkeitswirkung.
-3. Erst wenn die andere Person ebenfalls eine Verbindung zurück herstellt, gilt die Verbindung als gegenseitig.
-4. Nur bei einer gegenseitigen Verbindung können beide Seiten das jeweils andere private Profil einsehen — inhaltlich identisch zur eigenen privaten Ansicht, ohne dass eine öffentliche Freigabe nötig ist.
-5. Jede Seite kann die Verbindung jederzeit einseitig entfernen. Die andere Seite erhält darüber bewusst keine Benachrichtigung, um Druck oder nachträgliche Kontrolle über die Trennung zu vermeiden.
-6. Eine entfernte Verbindung muss von beiden Seiten erneut hergestellt werden, um wieder gegenseitig zu werden.
+2. Bevor diese (zunächst einseitige) Verbindung angelegt wird, bestätigt der Antragsteller aktiv einen Einwilligungstext: **„Ich möchte mit diesem Kennzeichen eine gegenseitige Verbindung herstellen. Mir ist bewusst: Sobald die Gegenseite mich ebenfalls hinzufügt, sehen wir beide gegenseitig das jeweils private Profil des anderen — bis eine Seite die Verbindung wieder entfernt.“** Zeitpunkt und Textversion werden mitgespeichert.
+3. Die Verbindung besteht zunächst nur einseitig und hat keine Sichtbarkeitswirkung.
+4. Erst wenn die andere Person ebenfalls — mit derselben expliziten Bestätigung — eine Verbindung zurück herstellt, gilt die Verbindung als gegenseitig.
+5. Nur bei einer gegenseitigen Verbindung können beide Seiten das jeweils andere private Profil einsehen — inhaltlich identisch zur eigenen privaten Ansicht, ohne dass eine öffentliche Freigabe nötig ist.
+6. Jede Seite kann die Verbindung jederzeit einseitig entfernen. Die andere Seite erhält darüber bewusst keine Benachrichtigung, um Druck oder nachträgliche Kontrolle über die Trennung zu vermeiden.
+7. Eine entfernte Verbindung muss von beiden Seiten erneut hergestellt werden, um wieder gegenseitig zu werden — inklusive erneuter expliziter Bestätigung nach Schritt 2.
 
 Diese Sichtbarkeit ist von der öffentlichen Freigabe (Flow F) unabhängig: Ein Profil kann gleichzeitig privat, für Freunde sichtbar und/oder öffentlich sein. Die Freunde-Sichtbarkeit setzt keine öffentliche Freigabe voraus und wird von deren Widerruf nicht berührt.
 
-> **⚠️ Rechtsrisiko R8 (siehe §23.8):** Anders als bei der öffentlichen Freigabe (Flow F, Schritt 4–5) gibt es hier keinen expliziten, protokollierten Einwilligungstext. Das Herstellen einer gegenseitigen Verbindung gewährt automatisch vollen Zugriff auf das private Profil — ohne einen gesonderten Bestätigungsschritt „Ich möchte mein privates Profil mit dieser Person teilen". Das ist inkonsistent mit dem sonst strengen Consent-Standard dieser Spezifikation.
-6. Der Antragsteller erhält eine knappe Entscheidung und einen Eskalationsweg.
+**Entschieden (11. August 2026, siehe §23.8):** Die Zustimmung wird bewusst bei **jedem** Hinzufügen-Klick eingeholt (nicht nur beim abschließenden, zweiten Schritt), damit Sichtbarkeit nie ausschließlich durch die Aktion der anderen Person entsteht, ohne dass man selbst im eigenen Moment aktiv zugestimmt hat.
 
 ---
 
@@ -963,14 +964,14 @@ Diese Spezifikation ist eine Produkt- und Umsetzungsvorgabe, keine Rechtsberatun
 
 **Entschieden (11. August 2026):** Für die produktive App reicht eine reine Selbstauskunfts-Checkbox „Ich habe den Fahrzeugschein" nicht aus. Das Feature ist damit ein hartes Launch-Gate (analog §14.10 `private_claimed_profiles`), nicht nur ein offener Prüfpunkt — der Prototyp bildet weiterhin nur die Checkbox ab, ausdrücklich als Demo-Vereinfachung. Der Scan-und-nicht-speichern-Ansatz aus dem Legal-Briefing ist die einzige bisher konkret angedachte Richtung, aber selbst noch nicht rechtlich bestätigt.
 
-### 23.8 Freunde-Sichtbarkeit ohne expliziten Einwilligungstext
-**Bezug:** §8.8 (neu). **Warum riskant:** Die gegenseitige Freunde-Verbindung schaltet automatisch vollen Zugriff auf das private Profil frei, ohne einen zu §8.6 Schritt 4–5 gleichwertigen, protokollierten Einwilligungstext. Der sonst durchgehend hohe Consent-Standard der Spezifikation gilt hier faktisch nicht — vor einer Rechtsprüfung entweder einen expliziten Bestätigungsschritt ergänzen oder begründen, warum die reziproke Herstellung der Verbindung als ausreichende Einwilligung gilt.
-
 ### 23.6 Schwelle für sensible Kategorien nicht eindeutig auf privat/öffentlich bezogen (entschieden)
 **Bezug:** §9.4. **Warum riskant war es:** Die Drei-Beobachter-90-Tage-Schwelle war nur für „ein Profil" formuliert. Offen blieb, ob eine einzelne, unter Umständen unzutreffende sensible Beobachtung sofort im privaten Profil sichtbar wird — mit entsprechendem Verleumdungs-/Persönlichkeitsrechtsrisiko gegenüber dem Halter. **Entschieden am 11. August 2026:** Die Schwelle gilt jetzt ausdrücklich auch privat, siehe §9.4.
 
 ### 23.7 Spannung zwischen Auskunftsrecht des Halters und Anonymität der beobachtenden Person
 **Bezug:** §14.2 vs. §14.5. **Warum riskant:** Der Halter hat ein Auskunftsrecht (Art. 15 DSGVO) über die zu ihm gespeicherten Beobachtungen; §14.2 will beobachtende Nutzer:innen aber anonym halten. Wie eine Auskunft beantwortet wird, ohne die beobachtende Person zu deanonymisieren, ist nicht geklärt.
+
+### 23.8 Freunde-Sichtbarkeit ohne expliziten Einwilligungstext (entschieden)
+**Bezug:** §8.8. **Warum riskant war es:** Die gegenseitige Freunde-Verbindung schaltete automatisch vollen Zugriff auf das private Profil frei, ohne einen zu §8.6 Schritt 4 gleichwertigen, protokollierten Einwilligungstext. **Entschieden am 11. August 2026:** Jede Seite bestätigt jetzt beim eigenen Hinzufügen-Klick aktiv einen Einwilligungstext, mit Zeitstempel und Textversion gespeichert (§8.8 Schritt 2) — nicht nur die Seite, die die Verbindung abschließend gegenseitig macht. Im Prototyp umgesetzt über `openFriendConsentModal()`, analog zu `openOptInModal()`.
 
 ---
 

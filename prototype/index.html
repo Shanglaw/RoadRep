@@ -455,7 +455,7 @@
       // frei — siehe isMutualFriend(). Dieser Demo-Eintrag simuliert, dass "acc-f" (Halterin von
       // B-FR 9001) das Demo-Konto bereits hinzugefügt hat, damit der Rückweg sofort testbar ist.
       friendLinks: [
-        { from: accF, to: "demo-user", requestedAt: daysAgo(30) }
+        { from: accF, to: "demo-user", requestedAt: daysAgo(30), consentedAt: daysAgo(30) }
       ],
       // Demo-Meldungen für das Moderations-Panel (§7.2/§14.4 der Spec) — eine offene (noch keine
       // Entscheidung) und eine bereits geschlossene (mit Audit-Protokoll-Eintrag), damit beide
@@ -1812,12 +1812,19 @@
         if (p.verifiedBy === state.currentUser.id) { toast("Das ist dein eigenes Kennzeichen."); return; }
         var already = (state.friendLinks||[]).some(function(l){ return l.from===state.currentUser.id && l.to===p.verifiedBy; });
         if (already) { toast("Bereits hinzugefügt."); return; }
-        state.friendLinks = state.friendLinks || [];
-        state.friendLinks.push({ from: state.currentUser.id, to: p.verifiedBy, requestedAt: now() });
-        saveState(state);
-        toast(isMutualFriend(p.verifiedBy) ? "Ihr seid jetzt gegenseitig verbunden." : "Hinzugefügt — wird sichtbar, sobald die Gegenseite dich auch hinzufügt.");
-        friendInput.value = "";
-        render();
+        openFriendConsentModal(p, function(){
+          state.friendLinks = state.friendLinks || [];
+          state.friendLinks.push({
+            from: state.currentUser.id, to: p.verifiedBy, requestedAt: now(),
+            // Zustimmungstext wird mitgespeichert, nicht nur ein Zeitstempel — belegt, WOZU genau
+            // zugestimmt wurde, analog zu publicOptInConsentText.
+            consentedAt: now(), consentText: FRIEND_CONSENT_TEXT
+          });
+          saveState(state);
+          toast(isMutualFriend(p.verifiedBy) ? "Ihr seid jetzt gegenseitig verbunden." : "Hinzugefügt — wird sichtbar, sobald die Gegenseite dich auch hinzufügt.");
+          friendInput.value = "";
+          render();
+        });
       }
       if (addFriendBtn) addFriendBtn.addEventListener("click", doAddFriend);
       friendInput.addEventListener("keydown", function(e){ if (e.key==="Enter") doAddFriend(); });
@@ -2074,6 +2081,40 @@
           saveState(state);
           closeModal(); toast("Profil ist jetzt öffentlich sichtbar.");
           render();
+        });
+      }
+    );
+  }
+
+  // Analog zu PUBLIC_OPTIN_CONSENT_TEXT (§8.6): explizite, protokollierte Zustimmung auch fürs
+  // Hinzufügen eines Freundes (§8.8/§23.8 der Spec — vorher fehlte hier ein gleichwertiger
+  // Consent-Schritt, obwohl das Ergebnis derselbe volle Profilzugriff ist wie beim öffentlichen Opt-in).
+  var FRIEND_CONSENT_TEXT = "Ich möchte mit diesem Kennzeichen eine gegenseitige Verbindung herstellen. Mir ist bewusst: Sobald die Gegenseite mich ebenfalls hinzufügt, sehen wir beide gegenseitig das jeweils private Profil des anderen — bis eine Seite die Verbindung wieder entfernt.";
+
+  // Jede Seite bestätigt für sich selbst in ihrem eigenen Klick-Moment (nicht erst beim
+  // abschließenden, zweiten Hinzufügen) — so entsteht Sichtbarkeit nie ausschließlich durch eine
+  // fremde Aktion, ohne dass man selbst aktiv zugestimmt hat.
+  function openFriendConsentModal(targetPlate, onConfirmed){
+    openModal(
+      '<h3 id="modal-title">Gegenseitige Verbindung herstellen</h3>' +
+      '<p style="color:var(--ink-muted); font-size:var(--fs-sm);">Du fügst hinzu:</p>' +
+      '<div class="card" style="background:var(--bg-sunken);">'+plateChip(targetPlate.display, null, targetPlate.country)+'</div>' +
+      '<label class="row" style="align-items:flex-start; gap:var(--sp-3); margin:var(--sp-4) 0; cursor:pointer;">' +
+        '<input type="checkbox" id="friend-consent-confirm"/>' +
+        '<span style="font-size:var(--fs-sm);">'+esc(FRIEND_CONSENT_TEXT)+'</span>' +
+      '</label>' +
+      '<div class="row" style="justify-content:flex-end; gap:var(--sp-3);">' +
+        '<button class="btn btn-secondary" id="modal-cancel">Abbrechen</button>' +
+        '<button class="btn btn-primary" id="modal-confirm-friend" disabled>Hinzufügen</button>' +
+      '</div>',
+      function(){
+        document.getElementById("modal-cancel").addEventListener("click", closeModal);
+        var chk = document.getElementById("friend-consent-confirm");
+        var confirmBtn = document.getElementById("modal-confirm-friend");
+        chk.addEventListener("change", function(){ confirmBtn.disabled = !chk.checked; });
+        confirmBtn.addEventListener("click", function(){
+          closeModal();
+          onConfirmed();
         });
       }
     );
