@@ -1478,32 +1478,45 @@
     // Ein Claim-Versuch ist an einem bereits fremdverifizierten Kennzeichen gescheitert (jedes
     // Kennzeichen kann immer nur von einem Konto verifiziert sein) — Status + Übernahmeweg statt
     // nur einer Fehlermeldung, weil ein echter Halterwechsel (Verkauf, Ummeldung) vorkommen kann.
-    // Übernahme-Anfrage/-Abschluss (transferRequest) ist weiterhin eine reine lokale Simulation
-    // (Phase 6.8 steht noch aus) - der Remote-Fetch hier lädt nur die Basisdaten, damit getPlate(b.norm)
-    // in den bestehenden Transfer-Handlern unten ein echtes Objekt statt undefined vorfindet.
+    // Übernahme-Anfrage/-Abschluss laufen seit Phase 6.8 über request_transfer()/finalize_transfer()
+    // (0004_functions.sql) - state.myTransferClaims kommt aus bootstrapState() (synchron verfügbar,
+    // gleiches Muster wie friendLinks). Der Remote-Fetch hier lädt daneben nur die Basisdaten des
+    // fremden Kennzeichens (Anzeigename, Sperrstatus).
     if (claimCtx.blocked) {
       var b = claimCtx.blocked;
       var bp = ensurePlateLoaded(b.norm, b.country);
       if (!bp.loaded) {
         return '<div class="stack"><h1>Mein Kennzeichen</h1><div class="card stack"><p style="color:var(--ink-muted)">Lade …</p></div></div>';
       }
-      var tr = bp.transferRequest;
-      var pendingBySelf = tr && tr.by === state.currentUser.id;
+      var claim = (state.myTransferClaims||[]).filter(function(c){ return c.norm === b.norm; })[0];
+      var pendingBySelf = !!claim;
+      // Es gibt keinen Hintergrundjob, der die Übernahme nach Fristablauf automatisch abschließt (reines
+      // Supabase-Backend ohne Cron) - "automatisch" aus der Spec-Formulierung heißt hier praktisch: sobald
+      // die Frist um ist, kann die anfragende Person selbst abschließen (finalize_transfer() prüft die
+      // Frist ohnehin nochmal serverseitig, siehe P0005-Fehlercode unten).
+      var eligible = pendingBySelf && now() >= claim.deadlineAt;
+      var blockedByMod = bp.reason === "blocked";
       return '<div class="stack">' +
         '<h1>Mein Kennzeichen</h1>' +
         '<div class="card stack">' +
           '<div>'+plateChip(b.display, null, b.country)+'</div>' +
-          (pendingBySelf
-            ? '<div class="callout warn" style="text-align:left;">Übernahme beantragt am '+fmtDate(tr.requestedAt)+'. Die aktuell verifizierte Person kann bis <strong>'+fmtDate(tr.deadlineAt)+'</strong> widersprechen — danach geht die Verifizierung automatisch auf dein Konto über.</div>' +
+          (blockedByMod
+            ? '<p style="color:var(--ink-muted); margin:0;">Dieses Kennzeichen ist von der Moderation gesperrt und kann aktuell nicht übernommen werden.</p>'
+            : pendingBySelf
+            ? '<div class="callout warn" style="text-align:left;">' +
+                (eligible
+                  ? 'Die Widerspruchsfrist ist abgelaufen — du kannst die Übernahme jetzt abschließen.'
+                  : 'Übernahme beantragt am '+fmtDate(claim.requestedAt)+'. Die aktuell verifizierte Person kann bis <strong>'+fmtDate(claim.deadlineAt)+'</strong> widersprechen — danach kannst du die Übernahme abschließen.') +
+              '</div>' +
               '<div class="row" style="gap:var(--sp-3); flex-wrap:wrap;">' +
                 '<button class="btn btn-secondary btn-sm" id="btn-transfer-cancel">Anfrage zurückziehen</button>' +
-                '<button class="btn btn-primary btn-sm" id="btn-transfer-finish">Demo: Frist überspringen &amp; jetzt übernehmen</button>' +
+                (eligible ? '<button class="btn btn-primary btn-sm" id="btn-transfer-finish">Übernahme abschließen</button>' : '') +
               '</div>'
             : '<p style="color:var(--ink-muted); margin:0;">Dieses Kennzeichen ist bereits von einem anderen Konto verifiziert — jedes Kennzeichen kann immer nur einmal verifiziert sein, sonst könnten sich zwei Personen gleichzeitig als Halter ausgeben.</p>' +
-              '<p style="color:var(--ink-muted); margin:0;">Gehört es inzwischen wirklich dir (z. B. nach einem Fahrzeugkauf), kannst du eine Übernahme beantragen. Im echten System würde das einen Belegabgleich (Zulassungsbescheinigung) plus eine Widerspruchsfrist für die Gegenseite auslösen — hier nur simuliert.</p>' +
+              '<p style="color:var(--ink-muted); margin:0;">Gehört es inzwischen wirklich dir (z. B. nach einem Fahrzeugkauf), kannst du eine Übernahme beantragen. Die aktuell verifizierte Person kann '+TRANSFER_WINDOW_DAYS+' Tage lang widersprechen, danach kannst du die Übernahme selbst abschließen.</p>' +
               '<label class="row" style="align-items:flex-start; gap:var(--sp-3); cursor:pointer;">' +
                 '<input type="checkbox" id="chk-fahrzeugschein-transfer"/>' +
-                '<span style="font-size:var(--fs-sm);">Ich bestätige, dass ich eine gültige Zulassungsbescheinigung Teil I (Fahrzeugschein) für dieses Kennzeichen besitze. (Demo: wird hier nicht wirklich geprüft.)</span>' +
+                '<span style="font-size:var(--fs-sm);">Ich bestätige, dass ich eine gültige Zulassungsbescheinigung Teil I (Fahrzeugschein) für dieses Kennzeichen besitze und im echten System hochladen würde. (Demo: wird hier nicht wirklich hochgeladen oder geprüft.)</span>' +
               '</label>' +
               '<button class="btn btn-primary btn-sm" id="btn-transfer-request" disabled>Übernahme beantragen</button>'
           ) +
@@ -2077,35 +2090,69 @@
       });
     });
 
-    // Übernahme-Flow für bereits fremdverifizierte Kennzeichen (Halterwechsel-Simulation)
+    // Übernahme-Flow für bereits fremdverifizierte Kennzeichen. request_transfer()/finalize_transfer()/
+    // cancel_transfer() (0004_functions.sql) - die 14-Tage-Wartefrist wird an plate_claims.deadline_at
+    // geprüft, es gibt keinen Client-Pfad mehr, der sie überspringt (P0005 bei verfrühtem Abschluss).
     var transferRequestBtn = document.getElementById("btn-transfer-request");
     var transferDoc = document.getElementById("chk-fahrzeugschein-transfer");
     if (transferDoc && transferRequestBtn) transferDoc.addEventListener("change", function(){ transferRequestBtn.disabled = !transferDoc.checked; });
     if (transferRequestBtn) transferRequestBtn.addEventListener("click", function(){
-      var b = claimCtx.blocked; var p = b && getPlate(b.norm);
-      if (!p) return;
-      if (p.moderationBlocked) { toast("Dieses Kennzeichen ist von der Moderation gesperrt und kann nicht übernommen werden."); return; }
-      p.transferRequest = { by: state.currentUser.id, requestedAt: now(), deadlineAt: now() + TRANSFER_WINDOW_DAYS*DAY, documentConfirmedAt: now() };
-      saveState(state); render();
+      var b = claimCtx.blocked;
+      if (!b) return;
+      transferRequestBtn.disabled = true;
+      plateLookupHash(b.norm, b.country).then(function(hash){
+        return db.rpc("request_transfer", { p_lookup_hash: hash, p_document_confirmed: true });
+      }).then(function(res){
+        if (res.error) throw res.error;
+        state.myTransferClaims = (state.myTransferClaims||[]).filter(function(c){ return c.norm !== b.norm; });
+        state.myTransferClaims.push({
+          id: res.data.claim_id, norm: b.norm, display: b.display, country: b.country,
+          requestedAt: now(), deadlineAt: new Date(res.data.deadline_at).getTime()
+        });
+        toast("Übernahme beantragt.");
+        render();
+      }).catch(function(err){
+        var code = err && err.code;
+        toast(code === "P0003" ? "Dieses Kennzeichen ist von der Moderation gesperrt und kann nicht übernommen werden." : "Fehler: " + ((err && err.message) || String(err)));
+        transferRequestBtn.disabled = false;
+      });
     });
     var transferCancelBtn = document.getElementById("btn-transfer-cancel");
     if (transferCancelBtn) transferCancelBtn.addEventListener("click", function(){
-      var b = claimCtx.blocked; var p = b && getPlate(b.norm);
-      if (p) delete p.transferRequest;
-      saveState(state); render();
+      var b = claimCtx.blocked;
+      var claim = b && (state.myTransferClaims||[]).filter(function(c){ return c.norm === b.norm; })[0];
+      if (!claim) return;
+      transferCancelBtn.disabled = true;
+      db.rpc("cancel_transfer", { p_claim_id: claim.id }).then(function(res){
+        if (res.error) throw res.error;
+        state.myTransferClaims = (state.myTransferClaims||[]).filter(function(c){ return c.id !== claim.id; });
+        toast("Anfrage zurückgezogen.");
+        render();
+      }).catch(function(err){
+        toast("Fehler: " + ((err && err.message) || String(err)));
+        transferCancelBtn.disabled = false;
+      });
     });
     var transferFinishBtn = document.getElementById("btn-transfer-finish");
     if (transferFinishBtn) transferFinishBtn.addEventListener("click", function(){
-      var b = claimCtx.blocked; var p = b && getPlate(b.norm);
-      if (!p) return;
-      p.verifiedBy = state.currentUser.id;
-      p.verifiedAt = now();
-      delete p.transferRequest;
-      state.currentUser.myPlateKey = b.norm;
-      claimCtx.blocked = null;
-      saveState(state);
-      toast("Übernahme abgeschlossen (Demo).");
-      render();
+      var b = claimCtx.blocked;
+      var claim = b && (state.myTransferClaims||[]).filter(function(c){ return c.norm === b.norm; })[0];
+      if (!claim) return;
+      transferFinishBtn.disabled = true;
+      db.rpc("finalize_transfer", { p_claim_id: claim.id }).then(function(res){
+        if (res.error) throw res.error;
+        state.myTransferClaims = (state.myTransferClaims||[]).filter(function(c){ return c.id !== claim.id; });
+        delete state.plates[b.norm]; // war fremdverifiziert, jetzt eigenes Profil -> frisch nachladen
+        state.currentUser.myPlateKey = b.norm;
+        state.currentUser.myPlateCountry = b.country;
+        claimCtx.blocked = null;
+        toast("Übernahme abgeschlossen.");
+        render();
+      }).catch(function(err){
+        var code = err && err.code;
+        toast(code === "P0005" ? "Die Widerspruchsfrist ist noch nicht abgelaufen." : "Fehler: " + ((err && err.message) || String(err)));
+        transferFinishBtn.disabled = false;
+      });
     });
     var claimCancelBtn = document.getElementById("btn-claim-cancel");
     if (claimCancelBtn) claimCancelBtn.addEventListener("click", function(){
@@ -2453,15 +2500,23 @@
     var newState = {
       currentUser: { id: user.id, email: user.email, myPlateKey: null, myPlateCountry: null, isModerator: false },
       friendLinks: [],
+      myTransferClaims: [],
       plates: {}
     };
     return Promise.all([
       db.from("plates").select("lookup_hash,display_plate").eq("verified_by", user.id).maybeSingle(),
       db.from("friend_links").select("from_user,to_user,requested_at,consented_at,consent_text")
         .or("from_user.eq." + user.id + ",to_user.eq." + user.id),
-      db.from("moderators").select("user_id").eq("user_id", user.id).maybeSingle()
+      db.from("moderators").select("user_id").eq("user_id", user.id).maybeSingle(),
+      // Eigene offenen Übernahme-Anfragen (Phase 6.8) - klein genug (eine pro versuchtem fremdverifizierten
+      // Kennzeichen), um komplett bei bootstrapState() mitzuladen statt einen eigenen Nachlade-Cache zu
+      // brauchen, gleiches Muster wie friendLinks. norm wird aus dem eingebetteten display_plate
+      // zurückgewonnen (normalizePlate() ist synchron, plateLookupHash() nicht - im synchronen
+      // viewMyPlate() wird nach norm verglichen, nicht nach lookup_hash).
+      db.from("plate_claims").select("id,requested_at,deadline_at,plates(display_plate,country_code)")
+        .eq("requesting_user_id", user.id).eq("status", "pending")
     ]).then(function(results){
-      var myPlateRes = results[0], linksRes = results[1], modRes = results[2];
+      var myPlateRes = results[0], linksRes = results[1], modRes = results[2], claimsRes = results[3];
       if (myPlateRes.data) {
         // myPlateKey muss eine normalisierte Kennzeichen-Zeichenkette sein (Mirror-Key, Vergleichswert
         // in isMine-Prüfungen), NICHT der lookup_hash — sonst matcht nichts mehr, das mit
@@ -2480,6 +2535,13 @@
         };
       });
       newState.currentUser.isModerator = !!modRes.data;
+      newState.myTransferClaims = (claimsRes.data || []).map(function(c){
+        var p = c.plates || {};
+        return {
+          id: c.id, norm: normalizePlate(p.display_plate || ""), display: p.display_plate, country: p.country_code || "DE",
+          requestedAt: new Date(c.requested_at).getTime(), deadlineAt: new Date(c.deadline_at).getTime()
+        };
+      });
       state = newState;
     });
   }
