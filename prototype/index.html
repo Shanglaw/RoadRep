@@ -761,13 +761,68 @@
   }
 
   function getPlate(norm){ return state.plates[norm]; }
-  function ensurePlate(norm, displayGuess, country){
-    if (!state.plates[norm]) {
-      state.plates[norm] = { display: displayGuess || norm, country: country || "DE", publicOptIn:false, publicOptInAt:null, observations: [] };
-    } else if (country && !state.plates[norm].country) {
-      state.plates[norm].country = country;
+
+  // SHA-256(country_code + normalizedPlate), hex-codiert. Muss für dasselbe Kennzeichen IMMER
+  // denselben Wert liefern, egal wer/wann/wo aufruft, sonst duplizieren sich Kennzeichen in der DB
+  // unsichtbar. Deshalb country IMMER frisch aus detectCountry() ableiten lassen, NIE aus einem
+  // schon geladenen Mirror-Eintrag übernehmen (siehe supabase/migrations/0004_functions.sql -
+  // die DB nimmt entgegen, was der Client schickt und verlässt sich nicht auf eine eigene Prüfung).
+  function plateLookupHash(norm, country){
+    var input = (country || "DE") + norm;
+    var data = new TextEncoder().encode(input);
+    return crypto.subtle.digest("SHA-256", data).then(function(buf){
+      return Array.prototype.map.call(new Uint8Array(buf), function(b){ return b.toString(16).padStart(2, "0"); }).join("");
+    });
+  }
+
+  // Bildet die JSON-Antwort von get_plate_profile() (0004_functions.sql) auf die Feldnamen ab, die
+  // renderProfile() erwartet. Die Funktion ist die einzige RoadScore-Quelle (SSOT) - computeAggregate()
+  // wird für ferngeladene Profile nicht mehr verwendet (bleibt vorerst nur für openOptInModal()s
+  // Vorschau stehen, siehe Kommentar dort - vollständige Entfernung folgt mit Phase 6.5).
+  function mapPlateProfile(data){
+    if (!data.visible) {
+      return { loaded: true, visible: false, reason: data.reason, display: data.display_plate || null, country: data.country_code || null };
     }
-    return state.plates[norm];
+    return {
+      loaded: true, visible: true, tier: data.tier, isActualOwner: !!data.is_actual_owner,
+      display: data.display_plate, country: data.country_code,
+      publicOptIn: data.public_opt_in, publicOptInAt: data.public_opt_in_at,
+      verified: data.verified, moderationHidden: data.moderation_hidden, moderationBlocked: data.moderation_blocked,
+      agg: {
+        score: data.score, enoughData: data.enough_data, trust: data.trust,
+        accountCount: data.account_count, validCount: data.valid_count, totalCount: data.total_count,
+        dist: data.dist || { positiv: 0, neutral: 0, negativ: 0 }, topCats: data.top_cats || [], periodDays: data.period_days
+      }
+    };
+  }
+
+  var plateFetchInFlight = {};
+
+  // viewResult()/viewRate()/viewMyPlate() sind synchron (Router-Konvention aus render()), aber
+  // get_plate_profile() ist ein async DB-Aufruf. Statt render() komplett auf async umzubauen: einmalig
+  // nachladen und render() erneut anstoßen, sobald die Antwort da ist - der zweite, synchrone
+  // render()-Durchlauf liest dann aus dem gefüllten Mirror (state.plates). force=true erzwingt ein
+  // Neuladen im Hintergrund (z. B. direkt nach einem eigenen Schreibzugriff), zeigt aber bis dahin noch
+  // den alten Stand, um kein Lade-Flackern zu erzeugen.
+  function ensurePlateLoaded(norm, country, force){
+    var entry = state.plates[norm];
+    if (entry && entry.loaded && !force) return entry;
+    if (!plateFetchInFlight[norm]) {
+      plateFetchInFlight[norm] = plateLookupHash(norm, country).then(function(hash){
+        return db.rpc("get_plate_profile", { p_lookup_hash: hash }).then(function(res){
+          if (res.error) throw res.error;
+          var mapped = mapPlateProfile(res.data);
+          mapped.hash = hash;
+          state.plates[norm] = mapped;
+        });
+      }).catch(function(err){
+        state.plates[norm] = { loaded: true, visible: false, reason: "error", errorMessage: (err && err.message) || String(err) };
+      }).then(function(){
+        delete plateFetchInFlight[norm];
+        render();
+      });
+    }
+    return entry || { loaded: false };
   }
 
   // Findet das Kennzeichen, das ein Konto verifiziert hat (für die Freundesliste: aus einem
@@ -1151,9 +1206,7 @@
           '</div>' +
         '</div>' +
         '<div class="callout info">' +
-          '<strong>Zum Ausprobieren:</strong> <span class="tabular">K-AB 550</span> ist öffentlich freigegeben (zeigt ein öffentliches Profil). ' +
-          '<span class="tabular">M-RX 1234</span> hat viel Historie — verifiziere es unter „Mein Kennzeichen“, um das private Profil zu sehen. ' +
-          'Jedes andere Kennzeichen zeigt bewusst nichts, außer du bewertest oder verifizierst es selbst — das ist Absicht, kein Bug.' +
+          'Ein Kennzeichen zeigt bewusst nichts, solange niemand es bewertet oder verifiziert hat — das ist Absicht, kein Bug. Bewerte oder verifiziere ein Kennzeichen selbst, um ein Profil zu sehen.' +
         '</div>' +
       '</div>';
   }
@@ -1167,37 +1220,39 @@
         '<div class="callout warn">„'+esc(rawInput)+'“ — '+esc(det.message)+'</div>' +
         '<a class="btn btn-secondary" href="#/search">Zurück zur Suche</a></div>';
     }
-    var plateObj = getPlate(norm);
-    var isMine = state.currentUser.myPlateKey === norm;
-    var plateCountry = (plateObj && plateObj.country) || det.country;
 
-    // Bei glaubhaftem Manipulationsverdacht kann Moderation ein Profil vorläufig verbergen (§14.4) —
-    // das gilt für ALLE Fremdansichten (öffentlich UND Freunde), nicht nur öffentlich. Die Halterin/
-    // der Halter selbst sieht ihr/sein eigenes Profil trotzdem weiter (siehe isMine-Zweig unten).
-    var hidden = !!(plateObj && (plateObj.moderationHidden || plateObj.moderationBlocked));
+    // get_plate_profile() (0004_functions.sql) entscheidet Sichtbarkeit UND liefert den RoadScore in
+    // einem Aufruf - Owner/Moderator vs. Freund vs. öffentlich vs. gar nicht wird jetzt serverseitig
+    // per RLS-Kriterien bestimmt, nicht mehr hier im Client (isMutualFriend()/computeAggregate() entfallen
+    // für diesen Pfad komplett).
+    var entry = ensurePlateLoaded(norm, det.country);
+    if (!entry.loaded) {
+      return '<div class="stack"><h1>'+plateChip(display,"lg",det.country)+'</h1>' +
+        '<div class="card stack"><p style="color:var(--ink-muted)">Lade Profil …</p></div></div>';
+    }
+    if (entry.reason === "error") {
+      return '<div class="stack"><h1>'+plateChip(display,"lg",det.country)+'</h1>' +
+        '<div class="callout warn">Profil konnte nicht geladen werden: '+esc(entry.errorMessage||"Unbekannter Fehler")+'</div>' +
+        '<button class="btn btn-secondary" id="btn-retry-load" data-retry-plate="'+esc(norm)+'" data-retry-country="'+esc(det.country)+'">Erneut versuchen</button></div>';
+    }
 
-    if (plateObj && plateObj.publicOptIn && !hidden) {
-      var agg = computeAggregate(plateObj, {scope:"public"});
-      return renderProfile({
-        norm: norm, display: plateObj.display, country: plateCountry, agg: agg, visibility: "public", isOwner: isMine
+    if (entry.visible) {
+      // tier "owner" schließt Moderator:innen mit ein (siehe is_actual_owner-Kommentar in
+      // 0004_functions.sql) - nur der wirkliche Owner bekommt die private Ansicht mit Opt-in-Steuerung,
+      // eine Moderationsperson bekommt eine eigene, klar erkennbare Ansicht ohne diese Steuerelemente.
+      var visibility = entry.tier === "owner" ? (entry.isActualOwner ? "private" : "moderator") : entry.tier;
+      var banner = (visibility === "private" || visibility === "moderator") ? moderationStatusBanner(entry) : "";
+      return banner + renderProfile({
+        norm: norm, display: entry.display || display, country: entry.country || det.country,
+        agg: entry.agg, visibility: visibility, isOwner: entry.isActualOwner, publicOptIn: entry.publicOptIn
       });
     }
 
-    if (isMine && plateObj) {
-      var agg2 = computeAggregate(plateObj, {scope:"private"});
-      return moderationStatusBanner(plateObj) + renderProfile({ norm: norm, display: plateObj.display, country: plateCountry, agg: agg2, visibility: "private", isOwner: true });
-    }
-
-    // Gegenseitige Freundschaft: private Sichtbarkeit ohne öffentliche Freigabe, aber ohne
-    // Eigentümer-Rechte (kein Opt-in/-out für die Sichtbarkeit — das bleibt bei der Halterin/dem Halter).
-    if (plateObj && plateObj.verifiedBy && isMutualFriend(plateObj.verifiedBy) && !hidden) {
-      var agg3 = computeAggregate(plateObj, {scope:"private"});
-      return renderProfile({ norm: norm, display: plateObj.display, country: plateCountry, agg: agg3, visibility: "friend", isOwner: false });
-    }
-
-    // Privat oder unbekannt: Flow A Schritt 6 — keinerlei Bewertungsdaten offenlegen.
+    // Privat, gesperrt, verborgen oder unbekannt: Flow A Schritt 6 — bewusst dieselbe Meldung für alle
+    // diese Fälle (kein Hinweis, WARUM nichts sichtbar ist), sonst würde die Formulierung selbst schon
+    // verraten, ob z. B. gerade ein Moderationsfall läuft.
     return '<div class="stack">' +
-      '<h1>'+plateChip(display,"lg",plateCountry)+'</h1>' +
+      '<h1>'+plateChip(display,"lg",entry.country||det.country)+'</h1>' +
       '<div class="card stack">' +
         '<p style="color:var(--ink-muted)">Für dieses Kennzeichen liegen keine öffentlich einsehbaren Informationen vor. Das gilt unabhängig davon, ob im Hintergrund bereits private Beobachtungen existieren — genau das ist der Datenschutz-Kern von RoadRep.</p>' +
         '<div class="row" style="gap:var(--sp-3); flex-wrap:wrap;">' +
@@ -1210,13 +1265,15 @@
 
   function renderProfile(opts){
     var norm=opts.norm, display=opts.display, agg=opts.agg, visibility=opts.visibility, isOwner=opts.isOwner;
-    var alsoPublic = opts.alsoPublic;
+    var publicOptIn = !!opts.publicOptIn;
     var country = opts.country || "DE";
     var visChip = visibility==="public"
       ? '<span class="chip chip-public">'+icon("globe")+' Öffentlich freigegeben</span>'
       : visibility==="friend"
       ? '<span class="chip chip-positive">'+icon("friend")+' Nur für euch sichtbar — ihr seid gegenseitig verbunden</span>'
-      : '<span class="chip chip-private">'+icon("lock")+' Privat — nur für dich sichtbar'+(alsoPublic?' · zusätzlich öffentlich freigegeben':'')+'</span>';
+      : visibility==="moderator"
+      ? '<span class="chip chip-muted">'+icon("lock")+' Moderationsansicht — für andere nicht sichtbar</span>'
+      : '<span class="chip chip-private">'+icon("lock")+' Privat — nur für dich sichtbar'+(publicOptIn?' · zusätzlich öffentlich freigegeben':'')+'</span>';
 
     var scoreArea;
     if (!agg.enoughData) {
@@ -1250,11 +1307,10 @@
 
     var optInArea = "";
     if (visibility==="private" && isOwner) {
-      var plateObj = getPlate(norm);
       optInArea = '<div class="card stack">' +
         '<p class="eyebrow" style="margin:0;">Sichtbarkeit</p>' +
         '<p style="margin:0; color:var(--ink-muted);">Standardmäßig ist dein Profil privat. Du kannst es freiwillig und jederzeit widerruflich veröffentlichen (§8.6 der Spec).</p>' +
-        (plateObj.publicOptIn
+        (publicOptIn
           ? '<button class="btn btn-danger-ghost" id="btn-revoke-public">Öffentliche Freigabe beenden</button>'
           : '<button class="btn btn-secondary" id="btn-make-public">Profil öffentlich machen</button>') +
       '</div>';
@@ -1303,11 +1359,14 @@
     var norm = rateCtx.plateNorm;
 
     // Gesperrt-Prüfung direkt hier, BEVOR die Schritte 2–4 (Typ/Kategorie/Bestätigung) überhaupt
-    // gezeigt werden — vorher stand der Hinweis erst ganz am Ende beim Absenden (submitObservation),
-    // nachdem man schon alle Schritte durchgeklickt hatte. So auch bei Direktlinks (#/rate/<plate>)
-    // abgedeckt, nicht nur beim manuellen "Weiter".
-    var blockedPlate = getPlate(norm);
-    if (blockedPlate && blockedPlate.moderationBlocked) {
+    // gezeigt werden — so auch bei Direktlinks (#/rate/<plate>) abgedeckt, nicht nur beim manuellen
+    // "Weiter". Läuft jetzt über denselben Remote-Fetch wie das Profil, deshalb erst nach dem ersten
+    // render()-Durchlauf sichtbar (kurzes Zeitfenster ohne clientseitige Vorwarnung) - submit_observations()
+    // erzwingt die Sperre server-seitig ohnehin unabhängig davon, das hier ist nur die schnelle
+    // Nutzer-Rückmeldung, kein Sicherheitsmechanismus.
+    var rateEntry = ensurePlateLoaded(norm, rateCtx.country);
+    var blocked = rateEntry.loaded && ((rateEntry.visible && rateEntry.moderationBlocked) || rateEntry.reason === "blocked");
+    if (blocked) {
       return '<div class="stack">' +
         '<h1>'+plateChip(rateCtx.display, null, rateCtx.country)+'</h1>' +
         '<div class="callout warn" style="text-align:left;">Dieses Kennzeichen ist von der Moderation gesperrt (bestätigter Verstoß) und kann aktuell nicht bewertet werden.</div>' +
@@ -1406,12 +1465,20 @@
     var mine = state.currentUser.myPlateKey;
 
     if (mine) {
-      var plateObj = getPlate(mine);
-      var agg = computeAggregate(plateObj, {scope:"private"});
+      var entry = ensurePlateLoaded(mine, state.currentUser.myPlateCountry);
+      if (!entry.loaded) {
+        return '<div class="stack"><h1>Mein Kennzeichen</h1><div class="card stack"><p style="color:var(--ink-muted)">Lade Profil …</p></div></div>';
+      }
+      if (!entry.visible) {
+        // Kann bei einer Race zwischen zwei Sitzungen desselben Kontos vorkommen (z. B. gerade in einem
+        // anderen Tab abgegeben) - kein Crash, sondern ein Hinweis statt einer falschen Ansicht.
+        return '<div class="stack"><h1>Mein Kennzeichen</h1>' +
+          '<div class="callout warn">Profil konnte nicht geladen werden (evtl. gerade freigegeben oder in Bearbeitung).</div></div>';
+      }
       return '<div class="stack">' +
         '<h1>Mein Kennzeichen</h1>' +
-        moderationStatusBanner(plateObj) +
-        renderProfile({ norm: mine, display: plateObj.display, country: plateObj.country||"DE", agg: agg, visibility: "private", isOwner: true, alsoPublic: plateObj.publicOptIn }) +
+        moderationStatusBanner(entry) +
+        renderProfile({ norm: mine, display: entry.display, country: entry.country||"DE", agg: entry.agg, visibility: "private", isOwner: true, publicOptIn: entry.publicOptIn }) +
         renderFriendsCard() +
         '<div class="callout" style="text-align:left;">Fahrzeug verkauft oder Kennzeichen abgegeben? Erst wenn du die Verifizierung freigibst, kann jemand anderes dieses Kennzeichen für sich beanspruchen.</div>' +
         '<button class="btn btn-ghost btn-sm" id="btn-unclaim">Fahrzeug verkauft / Kennzeichen abgeben</button>' +
@@ -1421,10 +1488,16 @@
     // Ein Claim-Versuch ist an einem bereits fremdverifizierten Kennzeichen gescheitert (jedes
     // Kennzeichen kann immer nur von einem Konto verifiziert sein) — Status + Übernahmeweg statt
     // nur einer Fehlermeldung, weil ein echter Halterwechsel (Verkauf, Ummeldung) vorkommen kann.
+    // Übernahme-Anfrage/-Abschluss (transferRequest) ist weiterhin eine reine lokale Simulation
+    // (Phase 6.8 steht noch aus) - der Remote-Fetch hier lädt nur die Basisdaten, damit getPlate(b.norm)
+    // in den bestehenden Transfer-Handlern unten ein echtes Objekt statt undefined vorfindet.
     if (claimCtx.blocked) {
       var b = claimCtx.blocked;
-      var bp = getPlate(b.norm);
-      var tr = bp && bp.transferRequest;
+      var bp = ensurePlateLoaded(b.norm, b.country);
+      if (!bp.loaded) {
+        return '<div class="stack"><h1>Mein Kennzeichen</h1><div class="card stack"><p style="color:var(--ink-muted)">Lade …</p></div></div>';
+      }
+      var tr = bp.transferRequest;
       var pendingBySelf = tr && tr.by === state.currentUser.id;
       return '<div class="stack">' +
         '<h1>Mein Kennzeichen</h1>' +
@@ -1466,7 +1539,7 @@
           '<span style="font-size:var(--fs-sm);">Ich bestätige, dass ich eine gültige Zulassungsbescheinigung Teil I (Fahrzeugschein) für dieses Kennzeichen besitze und im echten System hochladen würde. (Demo: wird hier nicht wirklich hochgeladen oder geprüft.)</span>' +
         '</label>' +
         '<button class="btn btn-primary btn-block" id="btn-claim" disabled>Als meins verifizieren (Demo)</button>' +
-        '<p style="font-size:var(--fs-2xs); color:var(--ink-faint); margin:0;">Tipp: <span class="tabular">M-RX 1234</span> hat bereits Bewertungshistorie von anderen Konten — gut geeignet, um das private Profil direkt zu sehen. <span class="tabular">F-ZZ 42</span> ist bereits fremdverifiziert — gut geeignet, um den Blockier-/Übernahme-Flow zu testen.</p>' +
+        '<p style="font-size:var(--fs-2xs); color:var(--ink-faint); margin:0;">Verifizierung legt das Kennzeichen in der echten Datenbank an, falls es dort noch nicht existiert.</p>' +
       '</div>' +
     '</div>';
   }
@@ -1545,11 +1618,11 @@
           '<p style="color:var(--ink-muted); margin:0;">Markenbild (Icon, Farben) übernommen aus <code>assets/brand/</code> im Repo. Das vollständige Logo-Lockup (Icon + Schriftzug) liegt zusätzlich unter <code>assets/brand/logo-560.png</code> im Projektordner für spätere Verwendung (z. B. Store-Icon, Marketing).</p>' +
           '<div class="review-item"><strong>Behoben (11. August 2026):</strong> Abschnitte 10.5 (Rest), 11, 12, 13.1–13.2 fehlten zwischenzeitlich in der Quelldatei (ein Tool-Output-Platzhalter war versehentlich in einen früheren Commit gerutscht) und wurden aus der Git-Historie wiederhergestellt. Die Vertrauensstufen-Labels hier (Vorläufig / Wachsende Datenbasis / Breite Datenbasis, ab 5/15/50 gültigen Beobachtungen) folgen jetzt exakt §10.5.</div>' +
           '<div class="review-item"><strong>Entschieden (11. August 2026):</strong> Die 3-Beobachter-Schwelle für sensible Kategorien (§9.4) gilt jetzt ausdrücklich für jedes Profil — privat, Freunde-Ansicht und öffentlich gleichermaßen, nicht nur für den öffentlichen Score. Vorher wurde sie in diesem Prototyp nur öffentlich angewendet.</div>' +
-          '<div class="review-item"><strong>Bekannter Formel-Effekt:</strong> Eine einzelne schwere Kategorie kann den Score schon bei der Mindestdatenmenge (5 Beobachtungen/3 Konten) um rund 15–20 Punkte bewegen. Zum Ausprobieren: bewerte <span class="tabular">K-AB 550</span> einmal mit „Behinderte eine Rettungsgasse“ und vergleiche den Score davor/danach.</div>' +
+          '<div class="review-item"><strong>Bekannter Formel-Effekt:</strong> Eine einzelne schwere Kategorie kann den Score schon bei der Mindestdatenmenge (5 Beobachtungen/3 Konten) um rund 15–20 Punkte bewegen.</div>' +
         '</div>' +
       '</details>' +
       '<div class="row" style="justify-content:center;">' +
-        '<button class="btn btn-ghost btn-sm" id="btn-reset-demo">Demo-Daten zurücksetzen</button>' +
+        '<button class="btn btn-ghost btn-sm" id="btn-reset-demo">Meine Daten neu laden</button>' +
       '</div>' +
       '<div class="row" style="justify-content:center; flex-direction:column; align-items:center; gap:6px;">' +
         '<a class="btn btn-ghost btn-sm" href="#/moderation">Moderation (Demo, nur für Mitarbeiter)</a>' +
@@ -1703,12 +1776,16 @@
     // Ergebnis: melden / öffentlich machen / widerrufen
     var reportBtn = document.getElementById("btn-report");
     if (reportBtn) reportBtn.addEventListener("click", function(){ openReportModal(reportBtn.getAttribute("data-plate")); });
+    // Öffentliches Opt-in/Widerruf ist noch nicht auf Supabase umgestellt (Phase 6.5, folgt) -
+    // openOptInModal()/die alte Widerruf-Logik würden nur den lokalen Mirror ändern und einen Erfolg
+    // vortäuschen, der nach einem Reload wieder weg wäre. Lieber ehrlich "noch nicht" sagen als das.
     var mkPublic = document.getElementById("btn-make-public");
-    if (mkPublic) mkPublic.addEventListener("click", function(){ openOptInModal(parseRoute()); });
+    if (mkPublic) mkPublic.addEventListener("click", function(){
+      toast("Öffentliche Freigabe wird gerade auf die neue Datenbank umgestellt — in Kürze wieder verfügbar.");
+    });
     var revoke = document.getElementById("btn-revoke-public");
     if (revoke) revoke.addEventListener("click", function(){
-      var norm = mine_or_result_norm();
-      var p = getPlate(norm); if (p) { p.publicOptIn = false; saveState(state); toast("Öffentliche Freigabe beendet."); render(); }
+      toast("Widerruf wird gerade auf die neue Datenbank umgestellt — in Kürze wieder verfügbar.");
     });
 
     // Bewerten: plate input step
@@ -1767,38 +1844,63 @@
         if (!det.ok) { toast(det.message); return; }
         var country = det.country;
         var display = formatPlateDisplay(v);
-        var existing = getPlate(norm);
-        // Ein von der Moderation gesperrtes Kennzeichen (bestätigter Verstoß) kann nicht verifiziert
-        // werden — weder neu noch als Übernahme.
-        if (existing && existing.moderationBlocked) {
-          toast("Dieses Kennzeichen ist von der Moderation gesperrt und kann nicht verifiziert werden.");
-          return;
-        }
-        // Jedes Kennzeichen kann nur von einem Konto gleichzeitig verifiziert sein — ein fremd
-        // verifiziertes Kennzeichen wird geblockt statt stillschweigend überschrieben.
-        if (existing && existing.verifiedBy && existing.verifiedBy !== state.currentUser.id) {
-          claimCtx.blocked = { norm: norm, display: existing.display || display, country: existing.country || country };
+
+        // claim_plate() (0004_functions.sql + 0005_claim_blocked_guard.sql) prüft serverseitig
+        // moderation_blocked, bereits-fremd-verifiziert UND den Fahrzeugschein-Nachweis
+        // (p_document_confirmed) - der Checkbox-Zustand hier ist zusätzlich zur disabled-Schaltung des
+        // Buttons auch keine reine Client-Attrappe mehr.
+        claimBtn.disabled = true;
+        var origLabel = claimBtn.textContent;
+        claimBtn.textContent = "Prüfe …";
+        plateLookupHash(norm, country).then(function(hash){
+          return db.rpc("claim_plate", {
+            p_lookup_hash: hash, p_display_plate: display, p_country_code: country, p_document_confirmed: true
+          });
+        }).then(function(res){
+          if (res.error) throw res.error;
+          delete state.plates[norm]; // eigener Verifizierungsstatus hat sich geändert -> frisch nachladen
+          state.currentUser.myPlateKey = norm;
+          state.currentUser.myPlateCountry = country;
+          claimCtx.blocked = null;
+          toast(res.data && res.data.status === "already_yours" ? "War bereits deins." : "Verifizierung erfolgreich.");
           render();
-          return;
-        }
-        var p = ensurePlate(norm, display, country);
-        p.verifiedBy = state.currentUser.id;
-        p.verifiedAt = now();
-        p.documentConfirmedAt = now(); // Nachweis des Fahrzeugscheins bestätigt (Demo: nur Checkbox, kein echter Upload/OCR)
-        state.currentUser.myPlateKey = norm;
-        claimCtx.blocked = null;
-        saveState(state);
-        toast("Demo-Verifizierung erfolgreich.");
-        render();
+        }).catch(function(err){
+          var code = err && err.code;
+          if (code === "P0004") {
+            claimCtx.blocked = { norm: norm, display: display, country: country };
+            render();
+            return;
+          }
+          if (code === "P0003") {
+            toast("Dieses Kennzeichen ist von der Moderation gesperrt und kann nicht verifiziert werden.");
+          } else {
+            toast("Fehler bei der Verifizierung: " + ((err && err.message) || String(err)));
+          }
+          claimBtn.disabled = false; claimBtn.textContent = origLabel;
+        });
       });
     }
     var unclaim = document.getElementById("btn-unclaim");
     if (unclaim) unclaim.addEventListener("click", function(){
       var mineNorm = state.currentUser.myPlateKey;
-      var p = mineNorm ? getPlate(mineNorm) : null;
-      if (p) { delete p.verifiedBy; delete p.verifiedAt; }
-      state.currentUser.myPlateKey = null;
-      saveState(state); render();
+      if (!mineNorm) return;
+      var mineCountry = state.currentUser.myPlateCountry;
+      unclaim.disabled = true;
+      // Direktes UPDATE statt RPC: durch die plates_update_owner-Policy (0003_rls.sql) gedeckt, kein
+      // eigener Server-Code nötig, nur der Eigentümer selbst darf seine eigene Zeile so ändern.
+      plateLookupHash(mineNorm, mineCountry).then(function(hash){
+        return db.from("plates").update({ verified_by: null, verified_at: null, document_confirmed_at: null }).eq("lookup_hash", hash);
+      }).then(function(res){
+        if (res.error) throw res.error;
+        delete state.plates[mineNorm];
+        state.currentUser.myPlateKey = null;
+        state.currentUser.myPlateCountry = null;
+        toast("Kennzeichen abgegeben.");
+        render();
+      }).catch(function(err){
+        toast("Fehler: " + ((err && err.message) || String(err)));
+        unclaim.disabled = false;
+      });
     });
 
     // Freunde: gegenseitige private Freigabe
@@ -1919,9 +2021,26 @@
       });
     });
 
+    // War früher "Demo-Daten zurücksetzen" (seedState()) - das würde jetzt den echten, aus Supabase
+    // geladenen state komplett durch lokale Phantasiedaten ersetzen und die Sitzung zerschießen. Lädt
+    // stattdessen den eigenen echten Stand neu.
     var resetBtn = document.getElementById("btn-reset-demo");
     if (resetBtn) resetBtn.addEventListener("click", function(){
-      state = seedState(); saveState(state); modAuthed = false; toast("Demo-Daten zurückgesetzt."); go("#/search"); render();
+      resetBtn.disabled = true;
+      db.auth.getSession().then(function(res){
+        var session = res.data && res.data.session;
+        if (!session) { toast("Nicht angemeldet."); return; }
+        return bootstrapState(session.user).then(function(){
+          state.plates = {};
+          toast("Daten neu geladen.");
+          go("#/search");
+          render();
+        });
+      }).catch(function(err){
+        toast("Fehler: " + ((err && err.message) || String(err)));
+      }).then(function(){
+        resetBtn.disabled = false;
+      });
     });
   }
 
@@ -1932,45 +2051,47 @@
     return null;
   }
 
+  // Mehrfachauswahl (bewusste Abweichung von Spec §8.2.4 "genau eine Kategorie", auf ausdrücklichen
+  // Nutzerwunsch): jede gewählte Kategorie wird als EIGENE Beobachtung gespeichert. Rate-Limits (24h/
+  // Kennzeichen, 30 Tage/Kategorie) werden jetzt von submit_observations() serverseitig erzwungen
+  // (0004_functions.sql) statt hier im Client durch Scannen von localStorage simuliert - das war
+  // vorher trivial umgehbar (Konsole öffnen, localStorage direkt ändern).
   function submitObservation(){
     var norm = rateCtx.plateNorm;
-    var plateObj = ensurePlate(norm, rateCtx.display, rateCtx.country);
-    if (plateObj.moderationBlocked) {
-      toast("Dieses Kennzeichen ist von der Moderation gesperrt und kann nicht bewertet werden.");
-      return;
-    }
-    var accId = state.currentUser.id;
-    var t = now();
-
-    var last24 = plateObj.observations.some(function(o){ return o.accountId===accId && (t-o.createdAt) < DAY; });
-    if (last24) { toast("Du hast dieses Kennzeichen in den letzten 24 Stunden bereits bewertet."); return; }
-
     var keys = rateCtx.categoryKeys || [];
     if (!keys.length) { toast("Bitte mindestens eine Kategorie wählen."); return; }
 
-    // Mehrfachauswahl (bewusste Abweichung von Spec §8.2.4 "genau eine Kategorie", auf ausdrücklichen
-    // Nutzerwunsch): jede gewählte Kategorie wird als EIGENE Beobachtung gespeichert, gleicher
-    // Zeitstempel — zählt für RoadScore/Mindestschwellen weiterhin einzeln, nicht gebündelt. Die
-    // 30-Tage-Sperre gilt weiterhin pro Kategorie einzeln; betroffene Kategorien werden übersprungen
-    // statt die ganze Einreichung abzulehnen.
-    var accepted = [], skipped = [];
-    keys.forEach(function(key){
-      var alreadyRecent = plateObj.observations.some(function(o){ return o.accountId===accId && o.categoryKey===key && (t-o.createdAt) < 30*DAY; });
-      if (alreadyRecent) { skipped.push(key); return; }
-      plateObj.observations.push({ id: "u-"+t+"-"+key, categoryKey: key, accountId: accId, createdAt: t });
-      accepted.push(key);
-    });
+    var submitBtn = document.getElementById("btn-rate-submit");
+    var origLabel = submitBtn ? submitBtn.textContent : "";
+    function resetBtn(){ if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = origLabel; } }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Sende …"; }
 
-    if (!accepted.length) {
-      toast("Alle gewählten Kategorien hast du für dieses Kennzeichen in den letzten 30 Tagen schon vergeben.");
-      return;
-    }
-    saveState(state);
-    lastSubmitResult = { accepted: accepted, skipped: skipped };
-    // plateNorm zurücksetzen (nicht display, das braucht die Bestätigungsseite noch), damit ein
-    // erneuter Eintritt in denselben oder einen anderen Bewertungsablauf sauber bei Schritt 2 startet.
-    rateCtx = { plateNorm: null, display: rateCtx.display, categoryKeys: [], step: 1 };
-    go("#/confirmed");
+    plateLookupHash(norm, rateCtx.country).then(function(hash){
+      return db.rpc("submit_observations", {
+        p_lookup_hash: hash, p_display_plate: rateCtx.display, p_country_code: rateCtx.country, p_category_keys: keys
+      });
+    }).then(function(res){
+      if (res.error) throw res.error;
+      var accepted = res.data.accepted || [];
+      var skipped = res.data.skipped || [];
+      if (!accepted.length) {
+        toast("Alle gewählten Kategorien hast du für dieses Kennzeichen in den letzten 30 Tagen schon vergeben.");
+        resetBtn();
+        return;
+      }
+      lastSubmitResult = { accepted: accepted, skipped: skipped };
+      delete state.plates[norm]; // eigener Beitrag verändert den Score -> beim nächsten Ansehen frisch laden
+      // plateNorm zurücksetzen (nicht display, das braucht die Bestätigungsseite noch), damit ein
+      // erneuter Eintritt in denselben oder einen anderen Bewertungsablauf sauber bei Schritt 2 startet.
+      rateCtx = { plateNorm: null, display: rateCtx.display, categoryKeys: [], step: 1 };
+      go("#/confirmed");
+    }).catch(function(err){
+      var code = err && err.code;
+      if (code === "P0001") toast("Du hast dieses Kennzeichen in den letzten 24 Stunden bereits bewertet.");
+      else if (code === "P0003") toast("Dieses Kennzeichen ist von der Moderation gesperrt und kann nicht bewertet werden.");
+      else toast("Fehler beim Speichern: " + ((err && err.message) || String(err)));
+      resetBtn();
+    });
   }
 
   /* ---------- Modals ---------- */
@@ -2182,19 +2303,27 @@
   // können (siehe Plan, Phase 5/6 -- "in-memory local mirror"-Strategie).
   function bootstrapState(user){
     var newState = {
-      currentUser: { id: user.id, email: user.email, myPlateKey: null, isModerator: false },
+      currentUser: { id: user.id, email: user.email, myPlateKey: null, myPlateCountry: null, isModerator: false },
       friendLinks: [],
       reports: [],
       plates: {}
     };
     return Promise.all([
-      db.from("plates").select("lookup_hash").eq("verified_by", user.id).maybeSingle(),
+      db.from("plates").select("lookup_hash,display_plate").eq("verified_by", user.id).maybeSingle(),
       db.from("friend_links").select("from_user,to_user,requested_at,consented_at,consent_text")
         .or("from_user.eq." + user.id + ",to_user.eq." + user.id),
       db.from("moderators").select("user_id").eq("user_id", user.id).maybeSingle()
     ]).then(function(results){
       var myPlateRes = results[0], linksRes = results[1], modRes = results[2];
-      if (myPlateRes.data) newState.currentUser.myPlateKey = myPlateRes.data.lookup_hash;
+      if (myPlateRes.data) {
+        // myPlateKey muss eine normalisierte Kennzeichen-Zeichenkette sein (Mirror-Key, Vergleichswert
+        // in isMine-Prüfungen), NICHT der lookup_hash — sonst matcht nichts mehr, das mit
+        // normalizePlate() aus Nutzereingaben gebildet wird. Aus display_plate rückgewinnen, dieselbe
+        // Quelle, aus der auch claim_plate() ursprünglich den Hash gebildet hat.
+        var myDet = detectCountry(myPlateRes.data.display_plate);
+        newState.currentUser.myPlateKey = normalizePlate(myPlateRes.data.display_plate);
+        newState.currentUser.myPlateCountry = myDet.ok ? myDet.country : "DE";
+      }
       newState.friendLinks = (linksRes.data || []).map(function(l){
         return {
           from: l.from_user, to: l.to_user,
