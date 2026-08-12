@@ -122,7 +122,7 @@ Der MVP ist ausdrücklich nicht:
 - Kennzeichen normalisieren und validieren
 - „Mein Kennzeichen“ beantragen und verifizieren
 - privates Kennzeichenprofil ausschließlich dem verifizierten Berechtigten anzeigen
-- eine Beobachtung über eine feste Kategorie abgeben
+- eine oder mehrere Beobachtungen über feste Kategorien in einem Schritt abgeben
 - RoadScore und Vertrauensstufe berechnen
 - Kategorieverteilung und Bewertungszeitraum anzeigen
 - Missbrauchsschutz und Rate Limits
@@ -136,6 +136,7 @@ Der MVP ist ausdrücklich nicht:
 
 - rechtlich freigegebene öffentliche Profilfreigabe per aktivem Opt-in
 - Vorschau, Bestätigung und sofortiger Widerruf der öffentlichen Freigabe
+- gegenseitige private Sichtbarkeit zwischen zwei verifizierten Kennzeichen („Freunde"), siehe 8.8 Flow H
 - Benachrichtigung bei neuen aggregierten Beobachtungen zum verifizierten Kennzeichen
 - einfache, grobe Bezirksstatistiken ohne Einzelkennzeichen-Ranking
 - Badges für überwiegend positives Verhalten
@@ -184,7 +185,7 @@ Diese Funktionen erhöhen das Risiko von Belästigung, Prangerwirkung oder Manip
 | Öffentliches Kennzeichenprofil | freiwillig freigegebene aggregierte Ansicht | RoadScore, Vertrauensstufe, Kategorien, Pflicht-Hinweis, Melden-Link |
 | Bewertungsablauf | Beobachtung erfassen | Bestätigung, Kategoriegruppe, Kategorie, Regeln, Absenden |
 | Bestätigung | Abschluss | Erfolgsmeldung, Sperrfrist, Profil öffnen |
-| Mein Kennzeichen | Eigentümerfunktion | Verifizierung, Übersicht, Widerspruch, Einstellungen |
+| Mein Kennzeichen | Eigentümerfunktion | Verifizierung, Übersicht, Freunde-Verwaltung, Widerspruch, Einstellungen |
 | Hilfe und Sicherheit | Regeln erklären | Verhaltensregel, FAQ, Notfallhinweis, Kontakt |
 | Moderation | Fälle bearbeiten | Meldungen, Historie, Maßnahmen, Audit-Protokoll |
 
@@ -207,12 +208,13 @@ Diese Funktionen erhöhen das Risiko von Belästigung, Prangerwirkung oder Manip
 
 1. Nutzer ist angemeldet und bestätigt das Kennzeichen.
 2. Die App zeigt: „Bewerte nur, was du selbst beobachtet hast.“
-3. Nutzer wählt **positiv**, **neutral** oder **negativ**.
-4. Nutzer wählt genau eine Kategorie.
-5. Die App zeigt eine kurze Definition der Kategorie.
-6. Nutzer bestätigt, dass keine Bewertung während des Fahrens abgegeben wird.
-7. Backend prüft Berechtigung, Rate Limits, Duplikate und Risikosignale.
-8. Bei Erfolg wird die Beobachtung gespeichert. Sie wird nur dann aggregiert öffentlich dargestellt, wenn das Kennzeichen rechtlich freigegeben im Zustand `PUBLIC_OPT_IN` steht und alle Mindestschwellen erfüllt sind.
+3. Nutzer wählt eine oder mehrere Kategorien aus **positiv**, **neutral** und **negativ** — dabei dürfen Kategorien unterschiedlichen Typs gemischt ausgewählt werden, wenn mehrere Beobachtungen an derselben Situation zutreffen.
+4. Die App zeigt zu jeder gewählten Kategorie eine kurze Definition.
+5. Nutzer bestätigt, dass keine Bewertung während des Fahrens abgegeben wird.
+6. Backend prüft Berechtigung, Rate Limits, Duplikate und Risikosignale je Kategorie.
+7. Bei Erfolg wird für jede gewählte Kategorie eine eigene Beobachtung gespeichert. Eine Beobachtung wird nur dann aggregiert öffentlich dargestellt, wenn das Kennzeichen rechtlich freigegeben im Zustand `PUBLIC_OPT_IN` steht und alle Mindestschwellen erfüllt sind.
+
+*(Vereinheitlicht am 11. August 2026 mit dem tatsächlich gebauten Prototyp-Verhalten — vorher stand hier „Nutzer wählt genau eine Kategorie". Frühere Fassung siehe Git-Historie.)*
 
 **Zielzeit:** unter 30 Sekunden ab geöffnetem Kennzeichenprofil.
 
@@ -270,6 +272,21 @@ Die Verifizierung weist nur die aktuelle Berechtigung zur Verwaltung des Kennzei
 3. Freitext wird nur in einem privaten Supportkanal zugelassen und niemals veröffentlicht.
 4. Das System vergibt eine Fallnummer und setzt je nach Risiko Sichtbarkeit oder Score-Verarbeitung vorläufig aus.
 5. Ein Moderator entscheidet anhand dokumentierter Regeln.
+
+### 8.8 Flow H: Freunde – gegenseitige private Sichtbarkeit (P1)
+
+*Ergänzt am 11. August 2026 — Feature existiert bereits im Prototyp, war zuvor nicht in der Spezifikation dokumentiert.*
+
+1. Ein verifizierter Nutzer schlägt einer anderen Person über deren verifiziertes Kennzeichen eine Verbindung vor.
+2. Die Verbindung besteht zunächst nur einseitig und hat keine Sichtbarkeitswirkung.
+3. Erst wenn die andere Person ebenfalls eine Verbindung zurück herstellt, gilt die Verbindung als gegenseitig.
+4. Nur bei einer gegenseitigen Verbindung können beide Seiten das jeweils andere private Profil einsehen — inhaltlich identisch zur eigenen privaten Ansicht, ohne dass eine öffentliche Freigabe nötig ist.
+5. Jede Seite kann die Verbindung jederzeit einseitig entfernen. Die andere Seite erhält darüber bewusst keine Benachrichtigung, um Druck oder nachträgliche Kontrolle über die Trennung zu vermeiden.
+6. Eine entfernte Verbindung muss von beiden Seiten erneut hergestellt werden, um wieder gegenseitig zu werden.
+
+Diese Sichtbarkeit ist von der öffentlichen Freigabe (Flow F) unabhängig: Ein Profil kann gleichzeitig privat, für Freunde sichtbar und/oder öffentlich sein. Die Freunde-Sichtbarkeit setzt keine öffentliche Freigabe voraus und wird von deren Widerruf nicht berührt.
+
+> **⚠️ Rechtsrisiko R8 (siehe §23.8):** Anders als bei der öffentlichen Freigabe (Flow F, Schritt 4–5) gibt es hier keinen expliziten, protokollierten Einwilligungstext. Das Herstellen einer gegenseitigen Verbindung gewährt automatisch vollen Zugriff auf das private Profil — ohne einen gesonderten Bestätigungsschritt „Ich möchte mein privates Profil mit dieser Person teilen". Das ist inkonsistent mit dem sonst strengen Consent-Standard dieser Spezifikation.
 6. Der Antragsteller erhält eine knappe Entscheidung und einen Eskalationsweg.
 
 ---
@@ -326,9 +343,9 @@ Eine Kategorie wird nur aufgenommen, wenn:
 
 ### 9.4 Sensible Kategorien
 
-Kategorien ab negativer Stufe 3 gelten als sensibel. Sie werden auf einem Profil erst einzeln ausgewiesen, wenn mindestens drei voneinander unabhängige, gültige Beobachter dieselbe Kategorie innerhalb von 90 Tagen gemeldet haben. Bis dahin werden sie weder als Einzelvorwurf angezeigt noch für einen öffentlich sichtbaren Score verwendet.
+Kategorien ab negativer Stufe 3 gelten als sensibel. Sie werden auf **jedem** Profil — privat, Freunde-Ansicht und öffentlich gleichermaßen — erst einzeln ausgewiesen, wenn mindestens drei voneinander unabhängige, gültige Beobachter dieselbe Kategorie innerhalb von 90 Tagen gemeldet haben. Bis dahin werden sie weder als Einzelvorwurf angezeigt noch für einen öffentlich sichtbaren Score verwendet. Das gilt ausdrücklich auch für den verifizierten Halter selbst: Eine einzelne sensible Meldung — etwa durch eine bestimmte Person, die weiß, dass nur der Halter sie sieht — darf nicht sofort im privaten Profil auftauchen.
 
-> **⚠️ Rechtsrisiko R6 (siehe §23.6):** Die Drei-Beobachter-Schwelle ist hier nur für die Anzeige „auf einem Profil" formuliert — nicht erkennbar auf öffentliche Profile beschränkt, aber auch nicht ausdrücklich für private Profile bestätigt. Unklar bleibt, ob eine einzelne, ggf. falsche sensible Meldung sofort im privaten Profil sichtbar wird, mit Persönlichkeitsrechts-/Verleumdungsrisiko, falls die Beobachtung unzutreffend ist.
+**Entschieden (11. August 2026):** Die Schwelle gilt bewusst auch privat, nicht nur öffentlich (vorher unklar formuliert, siehe §23.6). Konsequenz: Auch die private Ansicht zeigt eine frisch gemeldete sensible Kategorie zunächst nicht einzeln an, sondern erst nach Erreichen der Drei-Beobachter-Schwelle.
 
 ---
 
@@ -382,10 +399,166 @@ Eigenschaften:
 
 ### 10.5 Sichtbarkeit und Vertrauensstufe
 
-Der numerische RoadScore wird erst ab **fünf gültigen Beobachtungen von mindestens drei unabhängigen Konten** angezeigt. Vorher steht „Noch…1778 tokens truncated…profile,
-- gezielte Gegenseitigkeits- oder Vergeltungsmuster.
+Der numerische RoadScore wird erst ab **fünf gültigen Beobachtungen von mindestens drei unabhängigen Konten** angezeigt. Vorher steht „Noch nicht genügend Daten“.
 
-> **⚠️ Rechtsrisiko R4 (siehe §23.4):** Die Kapitelnummerierung springt hier von §10 auf §13.3 — §11, §12 sowie §13.1–13.2 fehlen im Dokument. Genau in diesem Bereich würde man Kriterien für Missbrauchs-/Manipulationserkennung erwarten (worauf sich „gezielte Gegenseitigkeits- oder Vergeltungsmuster" unmittelbar bezieht). Eine Rechtsprüfung wird exakt hier nachfragen: Nach welchen Kriterien werden Fake-Konten, koordinierte Kampagnen oder Bot-Bewertungen erkannt? Diese Lücke sollte vor einer Rechtsprüfung inhaltlich geschlossen oder zumindest bewusst als „absichtlich offen" dokumentiert werden.
+Zusätzlich wird eine Vertrauensstufe angezeigt:
+
+| Stufe | Effektive Datenbasis | Anzeige |
+|---|---:|---|
+| Keine | unter 5 Beobachtungen oder unter 3 Konten | Kein Score |
+| Niedrig | 5–14 gültige Beobachtungen | „Vorläufig“ |
+| Mittel | 15–49 gültige Beobachtungen | „Wachsende Datenbasis“ |
+| Hoch | ab 50 gültigen Beobachtungen | „Breite Datenbasis“ |
+
+Die Vertrauensstufe ist keine Aussage darüber, ob eine einzelne Beobachtung wahr ist. Sie beschreibt nur die Breite der Datenbasis.
+
+> **🛠️ Wiederhergestellt am 11. August 2026:** Der Text ab hier bis einschließlich §13.2 war durch einen fehlerhaften Edit in einem früheren Bearbeitungsschritt zerstört (Commit `773a33a`, 9. August 2026) und durch den wörtlichen Platzhaltertext eines abgeschnittenen Tool-Outputs ersetzt worden — erkennbar am Fragment „…1778 tokens truncated…“ mitten im Fließtext, das dabei sogar Teil des veröffentlichten Dokuments wurde. Das war keine Rechtslücke, sondern ein technischer Datenverlust. Der komplette Originalinhalt wurde unverändert aus dem vorherigen Commit `4261a62` wiederhergestellt. Siehe auch §23.4.
+
+### 10.6 Score-Darstellung
+
+- 0–29: deutlich negativ
+- 30–44: eher negativ
+- 45–55: ausgeglichen
+- 56–70: eher positiv
+- 71–100: deutlich positiv
+
+Die UI zeigt immer auch Datenmenge und Aktualität. Der Score darf nie ohne Kontext allein präsentiert werden.
+
+### 10.7 Neuberechnung
+
+- bei Annahme, Sperrung oder Löschung einer Beobachtung,
+- täglich für aktive Kennzeichenprofile wegen Zeitabwertung,
+- vollständig reproduzierbar aus den gültigen Beobachtungen,
+- mit gespeicherter Formelversion, damit spätere Änderungen nachvollziehbar bleiben.
+
+---
+
+## 11. Datenmodell-Vorschlag
+
+### 11.1 `users`
+
+| Feld | Typ | Zweck |
+|---|---|---|
+| `id` | UUID | interne ID |
+| `email_normalized` | String, verschlüsselt/geschützt | Anmeldung und Verifizierung |
+| `status` | Enum | active, restricted, suspended, deleted |
+| `email_verified_at` | Timestamp, nullable | Verifizierungsstatus |
+| `created_at` | Timestamp | Erstellung |
+| `deleted_at` | Timestamp, nullable | Löschstatus |
+
+### 11.2 `plates`
+
+| Feld | Typ | Zweck |
+|---|---|---|
+| `id` | UUID | interne ID |
+| `country_code` | String | Land des Kennzeichenformats |
+| `normalized_plate_ciphertext` | String | verschlüsselte Normalform |
+| `lookup_hash` | String, unique | exakte Suche ohne Klartextindex |
+| `display_plate` | String | rechtlich freigegebene Darstellung |
+| `profile_status` | Enum | active, limited, hidden, disputed |
+| `created_at` | Timestamp | Erstellung |
+
+### 11.3 `categories`
+
+| Feld | Typ | Zweck |
+|---|---|---|
+| `id` | UUID | interne ID |
+| `key` | String, unique | stabiler technischer Schlüssel |
+| `label` | String | Nutzertext |
+| `type` | Enum | positive, neutral, negative |
+| `weight` | Integer | RoadScore-Gewicht |
+| `severity` | Integer | Stufe 0–5 |
+| `is_sensitive` | Boolean | besondere Veröffentlichungsschwelle |
+| `definition` | Text | redaktionelle Erklärung |
+| `active_from`, `active_until` | Timestamp | Versionierung |
+
+### 11.4 `observations`
+
+| Feld | Typ | Zweck |
+|---|---|---|
+| `id` | UUID | interne ID |
+| `plate_id` | UUID | Zielkennzeichen |
+| `category_id` | UUID | ausgewählte Kategorie |
+| `reporter_user_id` | UUID | interner Beobachter |
+| `observed_at_bucket` | Date | grober Tag statt exakter öffentlicher Zeit |
+| `created_at` | Timestamp | technische Erstellung |
+| `status` | Enum | pending, valid, withheld, rejected, removed |
+| `moderation_reason_code` | Enum, nullable | feste Begründung |
+| `risk_score` | Decimal | Missbrauchssignal |
+| `formula_version` | String | Bewertungsregel bei Annahme |
+
+### 11.5 `score_snapshots`
+
+| Feld | Typ | Zweck |
+|---|---|---|
+| `plate_id` | UUID | Kennzeichen |
+| `score` | Integer | 0–100 |
+| `confidence_level` | Enum | none, low, medium, high |
+| `valid_observation_count` | Integer | Datenbasis |
+| `unique_reporter_count` | Integer | Unabhängigkeit |
+| `formula_version` | String | Nachvollziehbarkeit |
+| `calculated_at` | Timestamp | Aktualität |
+
+### 11.6 Weitere Tabellen
+
+- `plate_claims`: Antrag und Status von „Mein Kennzeichen“
+- `moderation_cases`: Meldungen, Widersprüche und Entscheidungen
+- `moderation_actions`: unveränderbares Audit-Protokoll
+- `rate_limit_events`: kurzlebige Missbrauchsschutzdaten
+- `account_risk_signals`: Kontorisiko ohne öffentliche Sichtbarkeit
+- `category_versions`: Historie von Bezeichnungen und Gewichten
+
+### 11.7 Datenminimierung
+
+- Keine GPS-Koordinaten oder Bewegungsverläufe speichern.
+- Keine Klarnamen für normale Nutzer erfassen.
+- IP-Adressen nicht dauerhaft als Rohwert speichern; falls nötig, kurzlebig und geschützt für Missbrauchsschutz verarbeiten.
+- Gerätekennungen nur pseudonymisiert, zweckgebunden und mit begrenzter Aufbewahrung nutzen.
+- Verifizierungsdokumente für „Mein Kennzeichen“ getrennt speichern und nach Abschluss nach der festgelegten kurzen Frist löschen.
+
+---
+
+## 12. API-Vorschlag
+
+| Methode | Route | Zweck |
+|---|---|---|
+| `POST` | `/v1/plates/lookup` | exakte Kennzeichensuche |
+| `GET` | `/v1/plates/{id}/profile` | aggregiertes Profil |
+| `GET` | `/v1/categories` | aktive Kategorien |
+| `POST` | `/v1/plates/{id}/observations` | Beobachtung abgeben |
+| `POST` | `/v1/plates/{id}/reports` | Profil melden |
+| `POST` | `/v1/observations/{id}/reports` | Beobachtung intern melden, sofern referenzierbar |
+| `POST` | `/v1/plate-claims` | „Mein Kennzeichen“ beantragen |
+| `GET` | `/v1/me/plate-claims` | eigene Anträge abrufen |
+| `POST` | `/v1/privacy-requests` | Auskunft, Widerspruch oder Löschprüfung |
+| `GET` | `/v1/admin/moderation-cases` | Moderationswarteschlange |
+| `POST` | `/v1/admin/moderation-cases/{id}/decision` | Entscheidung dokumentieren |
+
+Jede schreibende Route benötigt Authentifizierung, CSRF-/Token-Schutz, serverseitige Validierung, Rate Limits und Auditierung.
+
+---
+
+## 13. Missbrauchsschutz
+
+### 13.1 Mindestschutz im MVP
+
+- Nur verifizierte Konten dürfen bewerten.
+- Pro Konto und Kennzeichen höchstens eine Beobachtung innerhalb von 24 Stunden.
+- Dieselbe Kategorie darf vom selben Konto für dasselbe Kennzeichen höchstens einmal innerhalb von 30 Tagen vergeben werden.
+- Maximal 5 Abgaben in 10 Minuten und 20 Abgaben pro Tag je Konto.
+- Zusätzliche geschützte Limits je Netzwerk- und Gerätesignal.
+- Keine Bewertung des als „Mein Kennzeichen“ verifizierten eigenen Kennzeichens.
+- Konten mit auffälligen Mustern werden gedrosselt oder in manuelle Prüfung gestellt.
+- Gelöschte und neu erstellte Konten dürfen Sperrfristen nicht umgehen.
+
+### 13.2 Erkennung verdächtiger Muster
+
+- viele Bewertungen desselben Kennzeichens in kurzer Zeit,
+- Kontogruppen mit ähnlichem Verhalten,
+- wiederholte ausschließlich schwere Negativbewertungen,
+- automatisierte oder unrealistisch schnelle Eingaben,
+- ungewöhnlich hohe Zahl neu angelegter Kennzeichenprofile,
+- gezielte Gegenseitigkeits- oder Vergeltungsmuster.
 
 ### 13.3 Reaktionen des Systems
 
@@ -587,7 +760,7 @@ Eine Länderfreigabe darf nicht durch Client-Manipulation, URL-Parameter, Sprach
 
 ### Bewertungen
 
-- Eine Bewertung kann nur mit einer aktiven Kategorie abgesendet werden.
+- Eine Bewertung kann mit einer oder mehreren aktiven Kategorien abgesendet werden; jede ausgewählte Kategorie zählt als eigene, unabhängig geprüfte Beobachtung.
 - Freitext und Datei-Uploads existieren im öffentlichen Bewertungsablauf nicht.
 - Doppelte oder zu häufige Bewertungen werden serverseitig blockiert.
 - Eine erfolgreiche Bewertung wird reproduzierbar im Score berücksichtigt.
@@ -782,14 +955,19 @@ Diese Spezifikation ist eine Produkt- und Umsetzungsvorgabe, keine Rechtsberatun
 ### 23.3 Mehrländer-Freigabe hängt an einem einzigen ungeprüften Platzhalter
 **Bezug:** §14.9, §14.10. **Warum riskant:** `legal_review_version: "pending"` ist der einzige Mechanismus, der riskante Funktionen sperrt — die Spec definiert aber nicht, wer diesen Wert wie setzt oder prüft. Zusätzlich widerspricht der YAML-Default `retention_days: 0` dem in §14.6 empfohlenen Wert (24 Monate); vor der Rechtsprüfung klären, ob `0` „gesperrt" oder tatsächlich „keine Aufbewahrung" bedeuten soll.
 
-### 23.4 Fehlende Abschnitte §11, §12, §13.1–13.2 (Missbrauchs-/Manipulationserkennung)
-**Bezug:** Lücke zwischen §10.5 und §13.3. **Warum riskant:** Die Spezifikation ist an genau der Stelle unvollständig, an der ein:e Anwält:in typischerweise nachfragt: Wie wird koordinierte Rufschädigung, wie werden Fake-Konten oder Bot-Bewertungen erkannt? §13.3 spricht bereits von „Reaktionen des Systems" auf Muster, die vorher nie definiert wurden. Das ist eine inhaltliche Lücke im Dokument selbst, nicht nur ein Formatierungsfehler — vor einer Rechtsprüfung entweder füllen oder bewusst als offenen Punkt vermerken.
+### 23.4 §11, §12, §13.1–13.2 — kein Inhaltsproblem, sondern Datenverlust (behoben)
+**Bezug:** §10.5–§13.2. **Was tatsächlich passiert war:** Kein inhaltliches Versäumnis der Spezifikation — die ursprünglich vollständigen Abschnitte §10.6, §10.7, §11 (Datenmodell-Vorschlag), §12 (API-Vorschlag) und §13.1–13.2 (Missbrauchsschutz) wurden durch einen fehlerhaften Edit in Commit `773a33a` (9. August 2026) versehentlich durch den wörtlichen Platzhaltertext eines abgeschnittenen Tool-Outputs überschrieben („…1778 tokens truncated…“, sichtbar mitten im Fließtext von §10.5). **Behoben am 11. August 2026:** vollständig aus dem vorherigen Commit `4261a62` wiederhergestellt, siehe §10.5–§13.2 im Text. Trotzdem der Hinweis wert: Ein wörtlicher Tool-Truncation-Marker landete unbemerkt in einem Dokument, das später an einen Anwalt gehen sollte — ein Vier-Augen-Prinzip oder Diff-Review vor dem Commit hätte das sofort auffallen lassen.
 
 ### 23.5 Besitznachweis-Verfahren ist nicht konkretisiert
 **Bezug:** §8.5. **Warum riskant:** „Geeigneter Besitz-/Nutzungsnachweis nach dem rechtlich freigegebenen Verfahren" legt kein konkretes Verfahren fest. Ohne wirksamen Nachweis bleibt die Möglichkeit offen, dass jemand ein fremdes Kennzeichen beansprucht und dadurch Zugriff auf dessen Verhaltenshistorie samt Steuerungsrechten (öffentlich machen, widersprechen) erhält. Vertiefend dazu: `legal/rechtspruefung-briefing.md` §5 zum angedachten Scan-und-nicht-speichern-Verfahren.
 
-### 23.6 Schwelle für sensible Kategorien nicht eindeutig auf privat/öffentlich bezogen
-**Bezug:** §9.4. **Warum riskant:** Die Drei-Beobachter-90-Tage-Schwelle ist nur für „ein Profil" formuliert. Bleibt offen, ob eine einzelne, unter Umständen unzutreffende sensible Beobachtung sofort im privaten Profil sichtbar wird — mit entsprechendem Verleumdungs-/Persönlichkeitsrechtsrisiko gegenüber dem Halter.
+**Entschieden (11. August 2026):** Für die produktive App reicht eine reine Selbstauskunfts-Checkbox „Ich habe den Fahrzeugschein" nicht aus. Das Feature ist damit ein hartes Launch-Gate (analog §14.10 `private_claimed_profiles`), nicht nur ein offener Prüfpunkt — der Prototyp bildet weiterhin nur die Checkbox ab, ausdrücklich als Demo-Vereinfachung. Der Scan-und-nicht-speichern-Ansatz aus dem Legal-Briefing ist die einzige bisher konkret angedachte Richtung, aber selbst noch nicht rechtlich bestätigt.
+
+### 23.8 Freunde-Sichtbarkeit ohne expliziten Einwilligungstext
+**Bezug:** §8.8 (neu). **Warum riskant:** Die gegenseitige Freunde-Verbindung schaltet automatisch vollen Zugriff auf das private Profil frei, ohne einen zu §8.6 Schritt 4–5 gleichwertigen, protokollierten Einwilligungstext. Der sonst durchgehend hohe Consent-Standard der Spezifikation gilt hier faktisch nicht — vor einer Rechtsprüfung entweder einen expliziten Bestätigungsschritt ergänzen oder begründen, warum die reziproke Herstellung der Verbindung als ausreichende Einwilligung gilt.
+
+### 23.6 Schwelle für sensible Kategorien nicht eindeutig auf privat/öffentlich bezogen (entschieden)
+**Bezug:** §9.4. **Warum riskant war es:** Die Drei-Beobachter-90-Tage-Schwelle war nur für „ein Profil" formuliert. Offen blieb, ob eine einzelne, unter Umständen unzutreffende sensible Beobachtung sofort im privaten Profil sichtbar wird — mit entsprechendem Verleumdungs-/Persönlichkeitsrechtsrisiko gegenüber dem Halter. **Entschieden am 11. August 2026:** Die Schwelle gilt jetzt ausdrücklich auch privat, siehe §9.4.
 
 ### 23.7 Spannung zwischen Auskunftsrecht des Halters und Anonymität der beobachtenden Person
 **Bezug:** §14.2 vs. §14.5. **Warum riskant:** Der Halter hat ein Auskunftsrecht (Art. 15 DSGVO) über die zu ihm gespeicherten Beobachtungen; §14.2 will beobachtende Nutzer:innen aber anonym halten. Wie eine Auskunft beantwortet wird, ohne die beobachtende Person zu deanonymisieren, ist nicht geklärt.
@@ -801,7 +979,7 @@ Diese Spezifikation ist eine Produkt- und Umsetzungsvorgabe, keine Rechtsberatun
 *Ergänzt am 11. August 2026. Das hier sind **keine Rechtsrisiken**, sondern Stellen, an denen der Klick-Prototyp (`prototype/index.html`) inzwischen von diesem Dokument abweicht. Relevant, damit eine Rechtsprüfung nicht versehentlich den Spec-Text statt des tatsächlich gebauten Verhaltens bewertet.*
 
 - **§8.1 Länderwahl:** Spec beschreibt eine manuelle Länderwahl beim Suchen; der Prototyp erkennt das Land automatisch aus dem Kennzeichenformat.
-- **§8.2, Schritt 4 „Nutzer wählt genau eine Kategorie":** Der Prototyp erlaubt inzwischen Mehrfachauswahl über positiv/neutral/negativ hinweg in einem Schritt (auf ausdrücklichen Nutzerwunsch). Diese Abweichung ist eine bewusste Produktentscheidung dieser Session, noch nicht im Spec-Text nachgezogen.
-- **Freunde-Feature (gegenseitige private Sichtbarkeit):** Komplett neu, kommt in der Spezifikation nicht vor.
-- **Fahrzeugschein-Bestätigung als Checkbox:** Konkretisiert den in §8.5 offen gelassenen „geeigneten Besitz-/Nutzungsnachweis" durch eine Selbstauskunfts-Checkbox — eine von vielen möglichen Umsetzungen, nicht in der Spec festgelegt und nicht mit einer der in §23.5 genannten Rechtsfragen abgeglichen.
+- **Fahrzeugschein-Bestätigung als Checkbox:** Konkretisiert den in §8.5 offen gelassenen „geeigneten Besitz-/Nutzungsnachweis" durch eine Selbstauskunfts-Checkbox — für den Prototyp bewusst so belassen, für die produktive App laut §23.5 ausdrücklich nicht ausreichend.
 - **Moderations-Zugang über einen Demo-Code:** Der Prototyp nutzt einen einzelnen geteilten Zugangscode (`RR-MOD-2024`) statt echter rollenbasierter Konten, wie sie ein produktives Moderationssystem voraussetzen würde. Ausdrücklich als Demo-Notlösung gekennzeichnet, nicht als Sicherheitsmodell gedacht.
+
+*Aufgelöst am 11. August 2026: die Mehrfachauswahl (§8.2) und das Freunde-Feature (§8.8) waren hier bisher als Abweichungen gelistet und sind jetzt in die Spezifikation selbst nachgezogen.*

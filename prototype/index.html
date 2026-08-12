@@ -840,7 +840,9 @@
 
   function decay(ageDays){ return Math.pow(0.5, ageDays/HALFLIFE_DAYS); }
 
-  function sensitiveEligiblePublic(o, allObs){
+  // Gilt seit Spec-Update vom 11. August 2026 (§9.4) fuer JEDES Profil (privat, Freunde, oeffentlich) gleichermassen -
+  // vorher nur fuer scope "public" angewendet, was der damals unklaren Spec-Formulierung entsprach.
+  function sensitiveEligible(o, allObs){
     var cat = catByKey[o.categoryKey];
     if (!cat || !cat.sensitive) return true;
     var t = now();
@@ -853,11 +855,8 @@
 
   function computeAggregate(plateObj, opts){
     opts = opts || {};
-    var scope = opts.scope || "private"; // "private" | "public"
     var all = plateObj.observations || [];
-    var eligible = all.filter(function(o){
-      return scope === "public" ? sensitiveEligiblePublic(o, all) : true;
-    });
+    var eligible = all.filter(function(o){ return sensitiveEligible(o, all); });
     var accounts = {}; eligible.forEach(function(o){ accounts[o.accountId]=true; });
     var accountCount = Object.keys(accounts).length;
     var weightedSum = 0, evidence = 0;
@@ -875,11 +874,12 @@
     var score = Math.round(Math.max(0, Math.min(100, raw)));
     var enoughData = eligible.length >= MIN_OBS && accountCount >= MIN_ACCOUNTS;
 
-    var trust = "—";
+    // Stufen aus der (wiederhergestellten) Spec §10.5: Niedrig 5-14, Mittel 15-49, Hoch ab 50 gueltige Beobachtungen.
+    var trust = "Kein Score";
     if (enoughData) {
-      if (eligible.length >= 30) trust = "Belastbar";
-      else if (eligible.length >= 10) trust = "Etabliert";
-      else trust = "Neu";
+      if (eligible.length >= 50) trust = "Breite Datenbasis";
+      else if (eligible.length >= 15) trust = "Wachsende Datenbasis";
+      else trust = "Vorläufig";
     }
 
     var catCounts = {};
@@ -1534,8 +1534,8 @@
         '<div class="stack">' +
           '<p>Dies ist ein rein clientseitiger Klick-Demo-Prototyp auf Basis von <code>PRODUKTSPEZIFIKATION.md</code> (v1.1). Es gibt keinen Server, keine echte Verifizierung, keine echten Accounts. Alle Daten liegen nur in deinem Browser (localStorage).</p>' +
           '<p style="color:var(--ink-muted); margin:0;">Markenbild (Icon, Farben) übernommen aus <code>assets/brand/</code> im Repo. Das vollständige Logo-Lockup (Icon + Schriftzug) liegt zusätzlich unter <code>assets/brand/logo-560.png</code> im Projektordner für spätere Verwendung (z. B. Store-Icon, Marketing).</p>' +
-          '<div class="review-item"><strong>Offener Punkt in der Quelldatei:</strong> Abschnitte 10.5 (Rest), 11, 12, 13.1–13.2 fehlten im Originaldokument (Truncation-Artefakt beim Export). Die „Vertrauensstufe“ war dadurch nirgends definiert — die hier gezeigten Stufen (Neu / Etabliert / Belastbar, nach Anzahl gültiger Beobachtungen) sind eine plausible, aber selbst ergänzte Annahme.</div>' +
-          '<div class="review-item"><strong>Offener Punkt aus dem Review:</strong> Die 3-Beobachter-Schwelle für sensible Kategorien (§9.4) ist im Spec-Text nur für den <em>öffentlichen</em> Score verbindlich formuliert (§10.4). In diesem Prototyp wird sie deshalb nur für die öffentliche Ansicht angewendet — im privaten Profil kann eine einzelne sensible Meldung sofort sichtbar werden. Vor einer echten Umsetzung sollte das explizit entschieden werden.</div>' +
+          '<div class="review-item"><strong>Behoben (11. August 2026):</strong> Abschnitte 10.5 (Rest), 11, 12, 13.1–13.2 fehlten zwischenzeitlich in der Quelldatei (ein Tool-Output-Platzhalter war versehentlich in einen früheren Commit gerutscht) und wurden aus der Git-Historie wiederhergestellt. Die Vertrauensstufen-Labels hier (Vorläufig / Wachsende Datenbasis / Breite Datenbasis, ab 5/15/50 gültigen Beobachtungen) folgen jetzt exakt §10.5.</div>' +
+          '<div class="review-item"><strong>Entschieden (11. August 2026):</strong> Die 3-Beobachter-Schwelle für sensible Kategorien (§9.4) gilt jetzt ausdrücklich für jedes Profil — privat, Freunde-Ansicht und öffentlich gleichermaßen, nicht nur für den öffentlichen Score. Vorher wurde sie in diesem Prototyp nur öffentlich angewendet.</div>' +
           '<div class="review-item"><strong>Bekannter Formel-Effekt:</strong> Eine einzelne schwere Kategorie kann den Score schon bei der Mindestdatenmenge (5 Beobachtungen/3 Konten) um rund 15–20 Punkte bewegen. Zum Ausprobieren: bewerte <span class="tabular">K-AB 550</span> einmal mit „Behinderte eine Rettungsgasse“ und vergleiche den Score davor/danach.</div>' +
         '</div>' +
       '</details>' +
