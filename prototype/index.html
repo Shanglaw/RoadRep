@@ -863,15 +863,10 @@
   }
 
   /* ---------- Moderation (§7.2 / §14.4 der Spec) ---------- */
-  // Demo-Konto der Moderation — in echt bräuchte das eine echte Rollen-/Rechteprüfung serverseitig,
-  // clientseitig ist das hier nicht durchsetzbar (siehe Hinweis in viewModeration()).
-  var MOD_ACCOUNT_ID = "mod-demo";
-  // Demo-Zugangscode statt echtem Mitarbeiter-Login — bewusst KEINE echte Authentifizierung (der
-  // Code steht im Quelltext, jede:r mit Entwicklerkonsole käme trotzdem rein). Ersetzt in einem
-  // echten System ein serverseitiges Rollen-/Rechte-Login. modAuthed lebt nur im Speicher, nicht in
-  // localStorage, damit der Zugang bei jedem neuen Laden erneut bestätigt werden muss.
-  var MOD_DEMO_CODE = "RR-MOD-2024";
-  var modAuthed = false;
+  // Phase 6.7: MOD_DEMO_CODE/modAuthed/MOD_ACCOUNT_ID/getReport()/applyModerationDecision() entfernt -
+  // Zugriff läuft jetzt über state.currentUser.isModerator (echte moderators-Zeile, siehe bootstrapState())
+  // statt eines client-only Klartext-Codes; Entscheidungen über die is_moderator()-geprüfte RPC
+  // apply_moderation_decision() (0004_functions.sql), nicht mehr per lokalem Array-Push.
   var MOD_ACTION_LABELS = {
     dismiss: "Kein Verstoß — Fall geschlossen",
     hide: "Profil vorläufig verborgen",
@@ -881,32 +876,58 @@
     unblock: "Sperrung aufgehoben"
   };
   function modActionLabel(action){ return MOD_ACTION_LABELS[action] || action; }
-  // state.reports ist seit Phase 6.6 eine reine Demo-Attrappe: openReportModal() legt Fälle jetzt
-  // wirklich in moderation_cases an (echte Fallnummer vom Server), schreibt aber NICHT mehr hierhin -
-  // ein neu gemeldeter Fall taucht also unten in diesem Demo-Panel nicht auf. Bewusst nicht synchron
-  // gehalten, um keine zweite, potenziell abweichende Kopie zu pflegen; das ganze Panel (inkl.
-  // MOD_DEMO_CODE/modAuthed) wird mit Phase 6.7 durch einen echten db.from('moderation_cases')-Load
-  // ersetzt statt hier halbfertig geflickt zu werden.
-  function getReport(caseId){ return (state.reports||[]).filter(function(r){ return r.id===caseId; })[0]; }
 
-  // Jede Entscheidung wird protokolliert (§14.4: "fester Grundcode, Zeit, Bearbeiter, Ergebnis") —
-  // decisions[] ist damit das Audit-Protokoll, nicht nur der letzte Stand.
-  // "hide" (Verdachtsphase, reversibel, §14.4 "vorläufig verborgen") und "block" (nach bestätigtem
-  // Verstoß, härter: keine neuen Verifizierungen/Bewertungen mehr) sind bewusst getrennte Stufen —
-  // siehe Kommentar bei moderationStatusBanner().
-  function applyModerationDecision(caseId, action, note){
-    var c = getReport(caseId);
-    if (!c) return;
-    var plateObj = getPlate(c.plateNorm);
-    if (action === "hide" && plateObj) plateObj.moderationHidden = true;
-    if (action === "unhide" && plateObj) plateObj.moderationHidden = false;
-    if (action === "block" && plateObj) plateObj.moderationBlocked = true;
-    if (action === "unblock" && plateObj) plateObj.moderationBlocked = false;
-    if (action === "escalate") c.escalated = true;
-    if (action === "dismiss") c.status = "closed";
-    c.decisions = c.decisions || [];
-    c.decisions.push({ by: MOD_ACCOUNT_ID, at: now(), action: action, note: note || "" });
-    saveState(state);
+  var moderationCasesCache = null;
+  var moderationCasesFetchInFlight = false;
+
+  // Lädt alle Fälle EINMAL mit dem zugehörigen Kennzeichen-Snapshot (Embed über die plate_id-FK -
+  // plates_select_moderator, 0003_rls.sql, erlaubt das inkl. gesperrter/verborgener Kennzeichen). Gleiches
+  // Nachlade-Muster wie ensurePlateLoaded()/ensureUserPreviewLoaded(): force=true erzwingt ein Neuladen im
+  // Hintergrund (z. B. nach der eigenen Entscheidung), zeigt aber bis dahin den alten Stand.
+  function ensureModerationCasesLoaded(force){
+    if (moderationCasesCache && !force) return moderationCasesCache;
+    if (!moderationCasesFetchInFlight) {
+      moderationCasesFetchInFlight = true;
+      db.from("moderation_cases")
+        .select("id,case_number,reason,description,reported_by,created_at,status,escalated,plate_id,plates(display_plate,country_code,moderation_hidden,moderation_blocked)")
+        .order("created_at", { ascending: false })
+        .then(function(res){
+          if (res.error) throw res.error;
+          moderationCasesCache = { loaded: true, list: res.data || [] };
+        }).catch(function(err){
+          moderationCasesCache = { loaded: true, list: [], errorMessage: (err && err.message) || String(err) };
+        }).then(function(){
+          moderationCasesFetchInFlight = false;
+          render();
+        });
+    }
+    return moderationCasesCache || { loaded: false };
+  }
+
+  var moderationDecisionsCache = {};
+  var moderationDecisionsFetchInFlight = {};
+
+  // Audit-Protokoll (moderation_actions) je Fall separat nachgeladen statt beim Fälle-Laden mitgezogen -
+  // wird nur gebraucht, wenn ein Fall tatsächlich geöffnet wird (viewModerationCase()).
+  function ensureModerationDecisionsLoaded(caseId, force){
+    var entry = moderationDecisionsCache[caseId];
+    if (entry && entry.loaded && !force) return entry;
+    if (!moderationDecisionsFetchInFlight[caseId]) {
+      moderationDecisionsFetchInFlight[caseId] = db.from("moderation_actions")
+        .select("id,actor_user_id,action,note,acted_at")
+        .eq("case_id", caseId)
+        .order("acted_at", { ascending: false })
+        .then(function(res){
+          if (res.error) throw res.error;
+          moderationDecisionsCache[caseId] = { loaded: true, list: res.data || [] };
+        }).catch(function(err){
+          moderationDecisionsCache[caseId] = { loaded: true, list: [], errorMessage: (err && err.message) || String(err) };
+        }).then(function(){
+          delete moderationDecisionsFetchInFlight[caseId];
+          render();
+        });
+    }
+    return entry || { loaded: false };
   }
 
   /* ---------- RoadScore-Formel (Spec §10.3 / §10.4) ---------- */
@@ -1017,8 +1038,8 @@
   }
 
   // "block" (bestätigter Verstoß) ist die härtere, eigenständige Stufe nach "hide" (Verdacht,
-  // reversibel) — siehe Kommentar bei applyModerationDecision(). Ein gesperrtes Kennzeichen zeigt
-  // eine eigene, deutlichere Meldung statt der Verbergen-Meldung.
+  // reversibel) — siehe Kommentar bei apply_moderation_decision() (0004_functions.sql). Ein gesperrtes
+  // Kennzeichen zeigt eine eigene, deutlichere Meldung statt der Verbergen-Meldung.
   function moderationStatusBanner(plateObj){
     if (plateObj.moderationBlocked) {
       return '<div class="callout warn" style="text-align:left; border-color:var(--negative); background:var(--negative-soft); color:var(--negative);">Dieses Kennzeichen ist wegen eines bestätigten Verstoßes von der Moderation gesperrt: keine neuen Bewertungen, keine (Über-)Verifizierung mehr möglich, nicht für andere sichtbar.</div>';
@@ -1143,7 +1164,7 @@
       case "myplate": html = viewMyPlate(); break;
       case "confirmed": html = viewConfirmed(); break;
       case "help": html = viewHelp(); break;
-      case "moderation": html = modAuthed ? viewModeration(r.params[0] ? decodeURIComponent(r.params[0]) : null) : viewModerationGate(); break;
+      case "moderation": html = state.currentUser.isModerator ? viewModeration(r.params[0] ? decodeURIComponent(r.params[0]) : null) : viewModerationDenied(); break;
       case "friend-invite": html = viewFriendInvite(r.params[0] ? decodeURIComponent(r.params[0]) : null); break;
       default: html = viewSearch();
     }
@@ -1666,55 +1687,59 @@
       '<div class="row" style="justify-content:center;">' +
         '<button class="btn btn-ghost btn-sm" id="btn-reset-demo">Meine Daten neu laden</button>' +
       '</div>' +
-      '<div class="row" style="justify-content:center; flex-direction:column; align-items:center; gap:6px;">' +
-        '<a class="btn btn-ghost btn-sm" href="#/moderation">Moderation (Demo, nur für Mitarbeiter)</a>' +
-        '<span style="font-size:var(--fs-2xs); color:var(--ink-faint);">Demo-Zugangscode: <span class="tabular">'+esc(MOD_DEMO_CODE)+'</span></span>' +
+      '<div class="row" style="justify-content:center;">' +
+        '<a class="btn btn-ghost btn-sm" href="#/moderation">Moderation (nur für Mitarbeiter mit Moderationsrechten)</a>' +
       '</div>' +
     '</div>';
   }
 
   /* ---------- View: Moderation (§7.2 / §14.4 der Spec) ---------- */
-  function viewModerationGate(){
+  // state.currentUser.isModerator kommt aus bootstrapState() (SELECT gegen moderators, RLS erlaubt jedem
+  // eingeloggten Konto nur das Lesen der eigenen Mitgliedschaft nicht - moderators_select_authenticated
+  // lässt jeden Login alle Zeilen sehen, aber Client zeigt hier trotzdem nur den eigenen Status an). Die
+  // eigentliche Schutzgrenze ist serverseitig: is_moderator() in den plates_select_moderator/
+  // moderation_cases_select_moderator/apply_moderation_decision()-Prüfungen (0003_rls.sql,
+  // 0004_functions.sql). Diese Ansicht hier ist nur eine frühzeitige, informative Absage, keine eigene
+  // Schutzschicht - ein manipulierter Client käme trotzdem nicht an echte Moderationsdaten heran.
+  function viewModerationDenied(){
     return '<div class="stack">' +
-      '<h1>Moderations-Zugang</h1>' +
-      '<div class="callout">Demo-Zugangsschutz — <strong>keine echte Authentifizierung</strong>. In einem echten System würde hier ein serverseitiges Mitarbeiter-Login mit Rollenprüfung stehen; der Code hier steht im Quelltext und schützt nur vor versehentlichem Reinklicken, nicht vor echtem Zugriff.</div>' +
-      '<div class="card stack">' +
-        '<div>' +
-          '<label class="field-label" for="mod-code-input">Zugangscode</label>' +
-          '<input id="mod-code-input" type="password" autocomplete="off" placeholder="Demo-Code eingeben" />' +
-        '</div>' +
-        '<button class="btn btn-primary btn-block" id="btn-mod-unlock">Freischalten</button>' +
-        '<p style="font-size:var(--fs-2xs); color:var(--ink-faint); margin:0;">Demo-Code steht auf der Hilfe-Seite neben dem Moderations-Link.</p>' +
-      '</div>' +
+      '<h1>Moderation</h1>' +
+      '<div class="callout warn">Dieser Bereich ist nur für Mitarbeiter:innen mit Moderationsrechten zugänglich.</div>' +
+      '<a class="btn btn-secondary" href="#/search">Zur Suche</a>' +
     '</div>';
   }
 
   function viewModeration(caseId){
     if (caseId) return viewModerationCase(caseId);
 
-    // Eskalierte offene Fälle zuerst, dann übrige offene, geschlossene zuletzt — innerhalb jeder
-    // Gruppe neueste zuerst. Macht "Eskalieren" zu einer echten Priorisierung in der Liste, statt
+    var cache = ensureModerationCasesLoaded();
+    if (!cache.loaded) {
+      return '<div class="stack"><h1>Moderation</h1><div class="card stack"><p style="color:var(--ink-muted)">Lade Fälle …</p></div></div>';
+    }
+
+    // Eskalierte offene Fälle zuerst, dann übrige offene, geschlossene (dismissed) zuletzt — innerhalb
+    // jeder Gruppe neueste zuerst. Macht "Eskalieren" zu einer echten Priorisierung in der Liste, statt
     // nur ein Label zu ändern.
     function caseSortRank(c){
-      if (c.status !== "closed" && c.escalated) return 0;
-      if (c.status !== "closed") return 1;
+      if (c.status !== "dismissed" && c.escalated) return 0;
+      if (c.status !== "dismissed") return 1;
       return 2;
     }
-    var reports = (state.reports||[]).slice().sort(function(a,b){
+    var cases = cache.list.slice().sort(function(a,b){
       var ra = caseSortRank(a), rb = caseSortRank(b);
-      return ra !== rb ? ra - rb : b.createdAt - a.createdAt;
+      return ra !== rb ? ra - rb : new Date(b.created_at) - new Date(a.created_at);
     });
-    var rows = reports.length ? reports.map(function(c){
-      var statusChip = c.status==="closed"
+    var rows = cases.length ? cases.map(function(c){
+      var plate = c.plates || {};
+      var statusChip = c.status==="dismissed"
         ? '<span class="chip chip-muted">Geschlossen</span>'
         : (c.escalated ? '<span class="chip chip-severe">Eskaliert</span>' : '<span class="chip chip-negative">Offen</span>');
-      var plateObj = getPlate(c.plateNorm);
-      var hiddenNote = (plateObj && plateObj.moderationBlocked ? ' <span class="chip chip-negative">Gesperrt</span>' : "") +
-        (plateObj && plateObj.moderationHidden ? ' <span class="chip chip-muted">Verborgen</span>' : "");
+      var hiddenNote = (plate.moderation_blocked ? ' <span class="chip chip-negative">Gesperrt</span>' : "") +
+        (plate.moderation_hidden ? ' <span class="chip chip-muted">Verborgen</span>' : "");
       return '<a href="#/moderation/'+encodeURIComponent(c.id)+'" class="row" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--sp-3); padding:var(--sp-3) 0; border-bottom:1px solid var(--border); text-decoration:none; color:inherit;">' +
         '<span class="row" style="gap:var(--sp-3); align-items:center; flex-wrap:wrap;">' +
-          '<span class="tabular" style="font-weight:700;">'+esc(c.id)+'</span>' +
-          plateChip(c.plateDisplay, null, c.plateCountry) +
+          '<span class="tabular" style="font-weight:700;">'+esc(c.case_number)+'</span>' +
+          plateChip(plate.display_plate || "?", null, plate.country_code || "DE") +
           '<span style="color:var(--ink-muted); font-size:var(--fs-sm);">'+esc(c.reason)+'</span>' +
         '</span>' +
         '<span class="row" style="gap:var(--sp-2);">'+statusChip+hiddenNote+'</span>' +
@@ -1724,49 +1749,54 @@
     return '<div class="stack">' +
       '<div class="row" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--sp-3);">' +
         '<h1>Moderation</h1>' +
-        '<span class="row" style="gap:var(--sp-2); align-items:center;">' +
-          '<span class="chip chip-muted">Demo — nur für Mitarbeiter</span>' +
-          '<button class="btn btn-ghost btn-sm" id="btn-mod-logout">Abmelden</button>' +
-        '</span>' +
+        '<button class="btn btn-ghost btn-sm" id="btn-mod-refresh">Aktualisieren</button>' +
       '</div>' +
-      '<div class="callout">Zugangscode akzeptiert diese Sitzung lang — kein echtes Login, siehe Hinweis auf der vorherigen Seite. Im echten System bräuchte dieser Bereich serverseitige Rollen-/Rechteprüfung. Eskalierte offene Fälle stehen oben in der Liste.</div>' +
+      '<div class="callout">Eskalierte offene Fälle stehen oben in der Liste.</div>' +
       '<div class="card stack">'+rows+'</div>' +
     '</div>';
   }
 
   function viewModerationCase(caseId){
-    var c = getReport(caseId);
+    var cache = ensureModerationCasesLoaded();
+    if (!cache.loaded) {
+      return '<div class="stack"><h1>Moderation</h1><div class="card stack"><p style="color:var(--ink-muted)">Lade …</p></div></div>';
+    }
+    var c = cache.list.filter(function(x){ return x.id === caseId; })[0];
     if (!c) {
       return '<div class="stack"><h1>Fall nicht gefunden</h1>' +
-        '<div class="callout warn">Fallnummer „'+esc(caseId)+'“ existiert nicht (mehr).</div>' +
+        '<div class="callout warn">Fallnummer „'+esc(caseId)+'“ existiert nicht (mehr) oder wurde nicht geladen.</div>' +
         '<a class="btn btn-secondary" href="#/moderation">Zurück zur Fallliste</a></div>';
     }
-    var plateObj = getPlate(c.plateNorm);
-    var hidden = !!(plateObj && plateObj.moderationHidden);
-    var blocked = !!(plateObj && plateObj.moderationBlocked);
-    var closed = c.status === "closed";
+    var plate = c.plates || {};
+    var hidden = !!plate.moderation_hidden;
+    var blocked = !!plate.moderation_blocked;
+    var closed = c.status === "dismissed";
 
-    var decisionsHtml = (c.decisions && c.decisions.length) ? c.decisions.slice().reverse().map(function(d){
-      return '<div class="row" style="justify-content:space-between; align-items:flex-start; gap:var(--sp-3); padding:6px 0; border-bottom:1px solid var(--border);">' +
-        '<span>'+esc(modActionLabel(d.action))+(d.note?' — '+esc(d.note):'')+'</span>' +
-        '<span class="tabular" style="color:var(--ink-muted); font-size:var(--fs-2xs); white-space:nowrap;">'+fmtDate(d.at)+' · '+esc(d.by)+'</span>' +
-      '</div>';
-    }).join("") : '<p style="color:var(--ink-faint); margin:0;">Noch keine Entscheidung.</p>';
+    var decisions = ensureModerationDecisionsLoaded(caseId);
+    var decisionsHtml = !decisions.loaded
+      ? '<p style="color:var(--ink-muted); margin:0;">Lade …</p>'
+      : (decisions.list.length ? decisions.list.map(function(d){
+          var who = d.actor_user_id === state.currentUser.id ? "Du" : (d.actor_user_id.slice(0,8)+"…");
+          return '<div class="row" style="justify-content:space-between; align-items:flex-start; gap:var(--sp-3); padding:6px 0; border-bottom:1px solid var(--border);">' +
+            '<span>'+esc(modActionLabel(d.action))+(d.note?' — '+esc(d.note):'')+'</span>' +
+            '<span class="tabular" style="color:var(--ink-muted); font-size:var(--fs-2xs); white-space:nowrap;">'+fmtDate(d.acted_at)+' · '+esc(who)+'</span>' +
+          '</div>';
+        }).join("") : '<p style="color:var(--ink-faint); margin:0;">Noch keine Entscheidung.</p>');
 
     return '<div class="stack">' +
       '<a href="#/moderation" style="font-size:var(--fs-sm);">&larr; Zurück zur Fallliste</a>' +
       '<div class="row" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--sp-3);">' +
-        '<h1>Fall '+esc(c.id)+'</h1>' +
+        '<h1>Fall '+esc(c.case_number)+'</h1>' +
         (closed ? '<span class="chip chip-muted">Geschlossen</span>' : (c.escalated ? '<span class="chip chip-severe">Eskaliert</span>' : '<span class="chip chip-negative">Offen</span>')) +
       '</div>' +
       '<div class="card stack">' +
-        '<div>'+plateChip(c.plateDisplay, null, c.plateCountry)+
+        '<div>'+plateChip(plate.display_plate || "?", null, plate.country_code || "DE")+
           (blocked?' <span class="chip chip-negative">Gesperrt</span>':'')+
           (hidden?' <span class="chip chip-muted">Aktuell verborgen</span>':'')+
         '</div>' +
         '<p style="margin:0;"><strong>Grund:</strong> '+esc(c.reason)+'</p>' +
-        (c.text ? '<p style="margin:0; color:var(--ink-muted);"><strong>Angaben:</strong> '+esc(c.text)+'</p>' : '') +
-        '<p style="margin:0; color:var(--ink-faint); font-size:var(--fs-2xs);">Eingegangen am '+fmtDate(c.createdAt)+'</p>' +
+        (c.description ? '<p style="margin:0; color:var(--ink-muted);"><strong>Angaben:</strong> '+esc(c.description)+'</p>' : '') +
+        '<p style="margin:0; color:var(--ink-faint); font-size:var(--fs-2xs);">Eingegangen am '+fmtDate(c.created_at)+'</p>' +
       '</div>' +
       '<div class="card stack">' +
         '<p class="eyebrow" style="margin:0;">Maßnahme</p>' +
@@ -2082,39 +2112,40 @@
       claimCtx.blocked = null; render();
     });
 
-    // Moderation: Zugangscode
-    var modUnlockBtn = document.getElementById("btn-mod-unlock");
-    if (modUnlockBtn) {
-      var modCodeInput = document.getElementById("mod-code-input");
-      modCodeInput.focus();
-      function tryUnlock(){
-        if (modCodeInput.value.trim() === MOD_DEMO_CODE) {
-          modAuthed = true;
-          toast("Moderations-Zugang freigeschaltet.");
-          render();
-        } else {
-          toast("Falscher Code.");
-        }
-      }
-      modUnlockBtn.addEventListener("click", tryUnlock);
-      modCodeInput.addEventListener("keydown", function(e){ if (e.key==="Enter") tryUnlock(); });
-    }
-    var modLogoutBtn = document.getElementById("btn-mod-logout");
-    if (modLogoutBtn) modLogoutBtn.addEventListener("click", function(){
-      modAuthed = false;
-      go("#/search");
+    // Moderation: Fallliste manuell nachladen (kein Realtime/Polling, gleiches Muster wie der
+    // Freunde-Refresh-Button, siehe renderFriendsCard()-Kommentar).
+    var modRefreshBtn = document.getElementById("btn-mod-refresh");
+    if (modRefreshBtn) modRefreshBtn.addEventListener("click", function(){
+      modRefreshBtn.disabled = true;
+      ensureModerationCasesLoaded(true);
     });
 
-    // Moderation: Maßnahme wählen
+    // Moderation: Maßnahme wählen. apply_moderation_decision() (0004_functions.sql) prüft is_moderator()
+    // serverseitig und schreibt zuerst ins unveränderliche Audit-Log (moderation_actions), danach die
+    // Plate-/Case-Flags - der Client verlässt sich hier nur auf das Ergebnis, keine eigene Logik mehr.
     content.querySelectorAll("[data-mod-action]").forEach(function(btn){
       btn.addEventListener("click", function(){
         var caseId = btn.getAttribute("data-case");
         var action = btn.getAttribute("data-mod-action");
         var noteEl = document.getElementById("mod-note");
         var note = noteEl ? noteEl.value.trim() : "";
-        applyModerationDecision(caseId, action, note);
-        toast("Entscheidung gespeichert: " + modActionLabel(action));
-        render();
+        btn.disabled = true;
+        db.rpc("apply_moderation_decision", { p_case_id: caseId, p_action: action, p_note: note || null })
+          .then(function(res){
+            if (res.error) throw res.error;
+            // Case-Liste UND das Audit-Protokoll dieses Falls sind jetzt veraltet - beide neu laden.
+            // Betroffenes Kennzeichen zusätzlich aus dem plates-Mirror werfen: hide/block wirkt sich sofort
+            // auf dessen Sichtbarkeit anderswo aus (z. B. viewResult() für dieses Kennzeichen).
+            var c = (moderationCasesCache && moderationCasesCache.list || []).filter(function(x){ return x.id===caseId; })[0];
+            if (c && c.plates && c.plates.display_plate) delete state.plates[normalizePlate(c.plates.display_plate)];
+            delete moderationDecisionsCache[caseId];
+            toast("Entscheidung gespeichert: " + modActionLabel(action));
+            ensureModerationCasesLoaded(true);
+          }).catch(function(err){
+            btn.disabled = false;
+            var code = err && err.code;
+            toast(code === "P0006" ? "Keine Moderationsrechte für dieses Konto." : "Fehler: " + ((err && err.message) || String(err)));
+          });
       });
     });
 
@@ -2422,7 +2453,6 @@
     var newState = {
       currentUser: { id: user.id, email: user.email, myPlateKey: null, myPlateCountry: null, isModerator: false },
       friendLinks: [],
-      reports: [],
       plates: {}
     };
     return Promise.all([
