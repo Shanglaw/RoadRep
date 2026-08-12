@@ -8,6 +8,9 @@ Anwenden: Supabase-Projekt → SQL Editor → jede Datei **in dieser Reihenfolge
 4. `0004_functions.sql` — Rate-Limits, Moderation, RoadScore-Berechnung
 5. `0005_claim_blocked_guard.sql` — schließt eine beim Anschluss des Client-Claim-Flows (Phase 6.3)
    entdeckte Lücke: `claim_plate()`/`request_transfer()` prüften `moderation_blocked` bisher nicht
+6. `0006_friend_invite_preview.sql` — `get_invite_preview()` für den Einladungslink-Flow (Phase 6.4):
+   zeigt Kennzeichen + Land einer User-ID, bevor eine Freundschaftsbeziehung besteht (Henne-Ei-Problem
+   beim Consent-Dialog)
 
 Kein Supabase-CLI nötig — reines Copy-Paste in den SQL Editor, Dateien sind im Repo nur zur Versionierung.
 

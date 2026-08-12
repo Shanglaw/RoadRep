@@ -825,14 +825,31 @@
     return entry || { loaded: false };
   }
 
-  // Findet das Kennzeichen, das ein Konto verifiziert hat (für die Freundesliste: aus einem
-  // gemerkten accountId wieder das anzeigbare Kennzeichen ableiten).
-  function findPlateByAccount(accId){
-    var norms = Object.keys(state.plates);
-    for (var i=0;i<norms.length;i++){
-      if (state.plates[norms[i]].verifiedBy === accId) return state.plates[norms[i]];
+  var userPlatePreview = {};
+  var previewFetchInFlight = {};
+
+  // Freundesliste + Einladungslink (Phase 6.4) brauchen "welches Kennzeichen gehört zu dieser
+  // User-ID", OHNE dass schon eine (gegenseitige) Freundschaft besteht - genau das liefert
+  // get_invite_preview() (0006_friend_invite_preview.sql), absichtlich nur display_plate+country_code,
+  // kein Score. Gleiches Nachlade-Muster wie ensurePlateLoaded(), nur nach User-ID statt Kennzeichen-Norm
+  // gecacht.
+  function ensureUserPreviewLoaded(userId){
+    var entry = userPlatePreview[userId];
+    if (entry && entry.loaded) return entry;
+    if (!previewFetchInFlight[userId]) {
+      previewFetchInFlight[userId] = db.rpc("get_invite_preview", { p_user_id: userId }).then(function(res){
+        if (res.error) throw res.error;
+        userPlatePreview[userId] = res.data.found
+          ? { loaded: true, found: true, display: res.data.display_plate, country: res.data.country_code }
+          : { loaded: true, found: false };
+      }).catch(function(err){
+        userPlatePreview[userId] = { loaded: true, found: false, errorMessage: (err && err.message) || String(err) };
+      }).then(function(){
+        delete previewFetchInFlight[userId];
+        render();
+      });
     }
-    return null;
+    return entry || { loaded: false };
   }
 
   // Gegenseitig = beide Richtungen existieren in friendLinks (from→to UND to→from). Einseitig
@@ -1176,6 +1193,7 @@
       case "confirmed": html = viewConfirmed(); break;
       case "help": html = viewHelp(); break;
       case "moderation": html = modAuthed ? viewModeration(r.params[0] ? decodeURIComponent(r.params[0]) : null) : viewModerationGate(); break;
+      case "friend-invite": html = viewFriendInvite(r.params[0] ? decodeURIComponent(r.params[0]) : null); break;
       default: html = viewSearch();
     }
     content.innerHTML = html;
@@ -1548,21 +1566,40 @@
   // Bewusst OHNE Benachrichtigung bei Entfernen und mit stiller Rücknahme jederzeit — ein
   // "X hat dich entfernt"-Hinweis würde genau den Kontroll-/Rechtfertigungsdruck erzeugen, den
   // dieses Feature vermeiden soll (siehe Coercive-Control-Risiko bei Freunde-sehen-Standort-Apps).
+  //
+  // Verbindung läuft über einen Einladungslink (#/friend-invite/:uuid, siehe viewFriendInvite()),
+  // NICHT mehr über Kennzeichen-Eingabe: eine Tippfeld-Suche hätte bedeutet, dass man mit einem
+  // beliebigen Kennzeichen die dahinterliegende User-ID aufdecken kann, ohne dass die Gegenseite
+  // jemals zugestimmt hat, überhaupt auffindbar zu sein — genau die Art Entdeckbarkeit, die das
+  // private-by-default-Modell verhindern soll. Der Link macht daraus eine bewusste, von der
+  // einladenden Person selbst initiierte Weitergabe (Plan-Entscheidung dieser Session).
+  function incomingFriendRequests(){
+    var myId = state.currentUser.id;
+    var links = state.friendLinks || [];
+    return links.filter(function(l){
+      if (l.to !== myId || !l.consentedAt) return false;
+      var mutual = links.some(function(x){ return x.from===myId && x.to===l.from && x.consentedAt; });
+      return !mutual;
+    });
+  }
+
   function renderFriendsCard(){
     var myId = state.currentUser.id;
     var links = state.friendLinks || [];
     var outgoing = links.filter(function(l){ return l.from===myId; });
+    var incoming = incomingFriendRequests();
 
     var rows = outgoing.map(function(l){
-      var friendPlate = findPlateByAccount(l.to);
-      var label = friendPlate ? friendPlate.display : "Kennzeichen nicht mehr auffindbar";
-      var country = friendPlate ? friendPlate.country : "DE";
+      var preview = ensureUserPreviewLoaded(l.to);
+      var found = preview.loaded && preview.found;
+      var label = found ? preview.display : (preview.loaded ? "Kennzeichen nicht mehr auffindbar" : "Lädt …");
+      var country = found ? preview.country : "DE";
       var mutual = isMutualFriend(l.to);
       var statusChip = mutual
         ? '<span class="chip chip-positive">'+icon("friend")+' Gegenseitig</span>'
         : '<span class="chip chip-muted">Wartet auf Bestätigung</span>';
-      var openLink = mutual && friendPlate
-        ? '<a class="btn btn-ghost btn-sm" href="#/result/'+encodeURIComponent(friendPlate.display)+'">Profil ansehen</a>'
+      var openLink = mutual && found
+        ? '<a class="btn btn-ghost btn-sm" href="#/result/'+encodeURIComponent(preview.display)+'">Profil ansehen</a>'
         : "";
       return '<div class="row" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--sp-3);">' +
         '<div class="row" style="gap:var(--sp-3); align-items:center;">'+plateChip(label,null,country)+statusChip+'</div>' +
@@ -1572,20 +1609,74 @@
       '</div>';
     }).join("");
 
+    var incomingRows = incoming.map(function(l){
+      var preview = ensureUserPreviewLoaded(l.from);
+      var found = preview.loaded && preview.found;
+      var label = found ? preview.display : (preview.loaded ? "Kennzeichen nicht mehr auffindbar" : "Lädt …");
+      var country = found ? preview.country : "DE";
+      return '<div class="row" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--sp-3);">' +
+        '<div class="row" style="gap:var(--sp-3); align-items:center;">'+plateChip(label,null,country)+'<span class="chip chip-muted">Möchte sich verbinden</span></div>' +
+        '<button class="btn btn-secondary btn-sm" data-connect-incoming="'+esc(l.from)+'" '+(found?"":"disabled")+'>Verbinden</button>' +
+      '</div>';
+    }).join("");
+
+    var inviteLink = location.origin + location.pathname + "#/friend-invite/" + encodeURIComponent(myId);
+
     return '<div class="card stack">' +
-      '<p class="eyebrow" style="margin:0;">Freunde</p>' +
+      '<div class="row" style="justify-content:space-between; align-items:baseline;">' +
+        '<p class="eyebrow" style="margin:0;">Freunde</p>' +
+        '<button class="btn btn-ghost btn-sm" id="btn-refresh-friends" title="Neue eingehende Anfragen werden nicht automatisch angezeigt — hier manuell nachladen.">Aktualisieren</button>' +
+      '</div>' +
       '<p style="color:var(--ink-muted); margin:0;">Teile dein privates Profil gegenseitig mit Personen, die du kennst — ohne es öffentlich zu machen. Die Freigabe gilt erst, wenn ihr euch <strong>beide</strong> gegenseitig hinzufügt, und lässt sich jederzeit lautlos wieder entfernen — die Gegenseite bekommt davon keine Benachrichtigung.</p>' +
       (rows || '<p style="color:var(--ink-faint); font-size:var(--fs-2xs); margin:0;">Noch niemand hinzugefügt.</p>') +
+      (incomingRows ? '<div class="stack" style="gap:var(--sp-2);"><p class="eyebrow" style="margin:0;">Eingehende Anfragen</p>' + incomingRows + '</div>' : "") +
       '<div>' +
-        '<label class="field-label" for="friend-input">Kennzeichen einer Freundin/eines Freundes</label>' +
-        '<div class="plate-input-shell">' +
-          plateBandAuto("friend-input-band") +
-          '<input id="friend-input" type="text" placeholder="z. B. B FR 9001" autocomplete="off" maxlength="14" aria-describedby="friend-input-band friend-input-hint" />' +
+        '<label class="field-label" for="invite-link-field">Dein Einladungslink</label>' +
+        '<div class="row" style="gap:var(--sp-2);">' +
+          '<input id="invite-link-field" type="text" readonly value="'+esc(inviteLink)+'" style="flex:1;" />' +
+          '<button class="btn btn-secondary btn-sm" id="btn-copy-invite">Kopieren</button>' +
         '</div>' +
-        '<p class="ambig-hint" id="friend-input-hint" role="status"></p>' +
+        '<p style="font-size:var(--fs-2xs); color:var(--ink-faint); margin:var(--sp-2) 0 0;">Teile diesen Link (z. B. per WhatsApp) mit jemandem, den du kennst. Öffnet die Gegenseite ihn, sieht sie dein Kennzeichen und kann zustimmen — gegenseitig wird es erst, wenn ihr das beide tut.</p>' +
       '</div>' +
-      '<button class="btn btn-secondary btn-sm" id="btn-add-friend">Als Freund hinzufügen</button>' +
-      '<p style="font-size:var(--fs-2xs); color:var(--ink-faint); margin:0;">Tipp: <span class="tabular">B-FR 9001</span> hat dich in diesem Demo bereits hinzugefügt — die Freundschaft wird sofort gegenseitig.</p>' +
+    '</div>';
+  }
+
+  /* ---------- View: Einladungslink (§8.8 der Spec, Phase 6.4) ---------- */
+  function viewFriendInvite(inviterUuid){
+    if (!inviterUuid) {
+      return '<div class="stack"><h1>Einladungslink</h1>' +
+        '<div class="callout warn">Ungültiger Einladungslink.</div>' +
+        '<a class="btn btn-secondary" href="#/search">Zur Suche</a></div>';
+    }
+    var myId = state.currentUser.id;
+    if (inviterUuid === myId) {
+      return '<div class="stack"><h1>Einladungslink</h1>' +
+        '<div class="callout">Das ist dein eigener Einladungslink — teile ihn mit jemand anderem, nicht mit dir selbst.</div>' +
+        '<a class="btn btn-secondary" href="#/myplate">Zu Mein Kennzeichen</a></div>';
+    }
+    var already = (state.friendLinks||[]).some(function(l){ return l.from===myId && l.to===inviterUuid && l.consentedAt; });
+    if (already) {
+      return '<div class="stack"><h1>Einladungslink</h1>' +
+        '<div class="callout">Du hast dieser Verbindung bereits zugestimmt.</div>' +
+        '<a class="btn btn-secondary" href="#/myplate">Zu Mein Kennzeichen</a></div>';
+    }
+    var preview = ensureUserPreviewLoaded(inviterUuid);
+    if (!preview.loaded) {
+      return '<div class="stack"><h1>Einladungslink</h1><div class="card stack"><p style="color:var(--ink-muted)">Lade …</p></div></div>';
+    }
+    if (!preview.found) {
+      return '<div class="stack"><h1>Einladungslink</h1>' +
+        '<div class="callout warn">Diese Person hat noch kein Kennzeichen verifiziert — der Link funktioniert erst danach.</div>' +
+        '<a class="btn btn-secondary" href="#/search">Zur Suche</a></div>';
+    }
+    return '<div class="stack">' +
+      '<h1>Einladung zur gegenseitigen Verbindung</h1>' +
+      '<div class="card stack">' +
+        '<p style="color:var(--ink-muted); margin:0;">Jemand möchte sich mit dir verbinden:</p>' +
+        plateChip(preview.display, null, preview.country) +
+        '<p style="color:var(--ink-muted); margin:0;">Die Verbindung wird erst gegenseitig sichtbar, wenn ihr euch <strong>beide</strong> hinzufügt — dein Klick hier ist erst die eine Seite davon.</p>' +
+        '<button class="btn btn-primary" id="btn-invite-connect" data-inviter="'+esc(inviterUuid)+'">Verbinden</button>' +
+      '</div>' +
     '</div>';
   }
 
@@ -1903,50 +1994,93 @@
       });
     });
 
-    // Freunde: gegenseitige private Freigabe
-    var friendInput = document.getElementById("friend-input");
-    if (friendInput) {
-      var friendBand = document.getElementById("friend-input-band");
-      var friendHint = document.getElementById("friend-input-hint");
-      if (friendBand) friendInput.addEventListener("input", function(){ updateAutoBand(friendBand, friendInput.value, friendHint); });
-      var addFriendBtn = document.getElementById("btn-add-friend");
-      function doAddFriend(){
-        var v = friendInput.value.trim();
-        if (!v) { toast("Bitte ein Kennzeichen eingeben."); return; }
-        var norm = normalizePlate(v);
-        var det = detectCountry(v);
-        if (!det.ok) { toast(det.message); return; }
-        var p = getPlate(norm);
-        // Nur verifizierte Kennzeichen haben ein Konto, das die Freundschaft zurückgeben kann —
-        // sonst könnte man ein x-beliebiges (fremdes, unverifiziertes) Kennzeichen "adden".
-        if (!p || !p.verifiedBy) { toast("Dieses Kennzeichen ist noch nicht verifiziert und kann daher noch nicht als Freund hinzugefügt werden."); return; }
-        if (p.verifiedBy === state.currentUser.id) { toast("Das ist dein eigenes Kennzeichen."); return; }
-        var already = (state.friendLinks||[]).some(function(l){ return l.from===state.currentUser.id && l.to===p.verifiedBy; });
-        if (already) { toast("Bereits hinzugefügt."); return; }
-        openFriendConsentModal(p, function(){
+    // Freunde: gegenseitige private Freigabe über den Einladungslink (Phase 6.4) - Details siehe
+    // Kommentar bei renderFriendsCard(). connectFriend() ist der gemeinsame Bestätigungspfad für
+    // "Einladungslink öffnen" (btn-invite-connect) UND "Eingehende Anfrage" (data-connect-incoming):
+    // in beiden Fällen ist es dasselbe INSERT einer einseitigen, konsentierten Kante.
+    function connectFriend(targetId, triggerBtn, onDone){
+      var preview = userPlatePreview[targetId];
+      if (!preview || !preview.found) { toast("Kennzeichen nicht verfügbar."); return; }
+      openFriendConsentModal({ display: preview.display, country: preview.country }, function(){
+        if (triggerBtn) triggerBtn.disabled = true;
+        db.from("friend_links").insert({
+          from_user: state.currentUser.id, to_user: targetId,
+          consented_at: new Date().toISOString(), consent_text: FRIEND_CONSENT_TEXT
+        }).then(function(res){
+          if (res.error) throw res.error;
           state.friendLinks = state.friendLinks || [];
-          state.friendLinks.push({
-            from: state.currentUser.id, to: p.verifiedBy, requestedAt: now(),
-            // Zustimmungstext wird mitgespeichert, nicht nur ein Zeitstempel — belegt, WOZU genau
-            // zugestimmt wurde, analog zu publicOptInConsentText.
-            consentedAt: now(), consentText: FRIEND_CONSENT_TEXT
-          });
-          saveState(state);
-          toast(isMutualFriend(p.verifiedBy) ? "Ihr seid jetzt gegenseitig verbunden." : "Hinzugefügt — wird sichtbar, sobald die Gegenseite dich auch hinzufügt.");
-          friendInput.value = "";
+          state.friendLinks.push({ from: state.currentUser.id, to: targetId, requestedAt: now(), consentedAt: now(), consentText: FRIEND_CONSENT_TEXT });
+          // Falls das Profil der Gegenseite schon (als "privat/nicht sichtbar") gecacht war, jetzt
+          // ungültig machen - könnte durch die neue (ggf. gegenseitige) Freundschaft sichtbar geworden sein.
+          delete state.plates[normalizePlate(preview.display)];
+          toast(isMutualFriend(targetId) ? "Ihr seid jetzt gegenseitig verbunden." : "Hinzugefügt — wird sichtbar, sobald die Gegenseite dich auch hinzufügt.");
+          if (onDone) onDone(); else render();
+        }).catch(function(err){
+          toast("Fehler: " + ((err && err.message) || String(err)));
+          if (triggerBtn) triggerBtn.disabled = false;
+        });
+      });
+    }
+    var inviteConnectBtn = document.getElementById("btn-invite-connect");
+    if (inviteConnectBtn) inviteConnectBtn.addEventListener("click", function(){
+      connectFriend(inviteConnectBtn.getAttribute("data-inviter"), inviteConnectBtn, function(){ go("#/myplate"); });
+    });
+    content.querySelectorAll("[data-connect-incoming]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        connectFriend(btn.getAttribute("data-connect-incoming"), btn);
+      });
+    });
+    // friend_links wird nur einmal bei bootstrapState() geladen, es gibt kein Realtime/Polling (bewusst
+    // einfach gehalten) - ohne diesen Button sieht A eine eingehende Anfrage von B erst nach einem vollen
+    // Reload/Re-Login, was im Zwei-Konten-Test wie ein Bug aussieht. bootstrapState() lädt friendLinks neu,
+    // ohne den plates-Mirror zu leeren (anders als btn-reset-demo) - das aktuell offene Profil bleibt erhalten.
+    var refreshFriendsBtn = document.getElementById("btn-refresh-friends");
+    if (refreshFriendsBtn) refreshFriendsBtn.addEventListener("click", function(){
+      refreshFriendsBtn.disabled = true;
+      var keepPlates = state.plates;
+      db.auth.getSession().then(function(res){
+        var session = res.data && res.data.session;
+        if (!session) { toast("Nicht angemeldet."); return; }
+        return bootstrapState(session.user).then(function(){
+          state.plates = keepPlates;
+          toast("Aktualisiert.");
           render();
         });
+      }).catch(function(err){
+        toast("Fehler: " + ((err && err.message) || String(err)));
+        refreshFriendsBtn.disabled = false;
+      });
+    });
+    var copyInviteBtn = document.getElementById("btn-copy-invite");
+    if (copyInviteBtn) copyInviteBtn.addEventListener("click", function(){
+      var field = document.getElementById("invite-link-field");
+      var link = field ? field.value : "";
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(function(){ toast("Link kopiert."); }).catch(function(){
+          if (field) field.select();
+          toast("Kopieren nicht möglich — Link ist markiert, manuell kopieren.");
+        });
+      } else if (field) {
+        field.select();
+        toast("Link ist markiert — manuell kopieren.");
       }
-      if (addFriendBtn) addFriendBtn.addEventListener("click", doAddFriend);
-      friendInput.addEventListener("keydown", function(e){ if (e.key==="Enter") doAddFriend(); });
-    }
+    });
     content.querySelectorAll("[data-remove-friend]").forEach(function(btn){
       btn.addEventListener("click", function(){
         var to = btn.getAttribute("data-remove-friend");
+        var preview = userPlatePreview[to];
+        btn.disabled = true;
         // Bewusst ohne jede Benachrichtigung an die Gegenseite — siehe Kommentar bei renderFriendsCard().
-        state.friendLinks = (state.friendLinks||[]).filter(function(l){ return !(l.from===state.currentUser.id && l.to===to); });
-        saveState(state);
-        render();
+        db.from("friend_links").delete().eq("from_user", state.currentUser.id).eq("to_user", to)
+          .then(function(res){
+            if (res.error) throw res.error;
+            state.friendLinks = (state.friendLinks||[]).filter(function(l){ return !(l.from===state.currentUser.id && l.to===to); });
+            if (preview && preview.found) delete state.plates[normalizePlate(preview.display)];
+            render();
+          }).catch(function(err){
+            toast("Fehler: " + ((err && err.message) || String(err)));
+            btn.disabled = false;
+          });
       });
     });
 
