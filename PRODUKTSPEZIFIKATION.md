@@ -981,6 +981,7 @@ Diese Spezifikation ist eine Produkt- und Umsetzungsvorgabe, keine Rechtsberatun
 
 - **§8.1 Länderwahl:** Spec beschreibt eine manuelle Länderwahl beim Suchen; der Prototyp erkennt das Land automatisch aus dem Kennzeichenformat.
 - **Fahrzeugschein-Bestätigung als Checkbox:** Konkretisiert den in §8.5 offen gelassenen „geeigneten Besitz-/Nutzungsnachweis" durch eine Selbstauskunfts-Checkbox — für den Prototyp bewusst so belassen, für die produktive App laut §23.5 ausdrücklich nicht ausreichend.
-- **Moderations-Zugang über einen Demo-Code:** Der Prototyp nutzt einen einzelnen geteilten Zugangscode (`RR-MOD-2024`) statt echter rollenbasierter Konten, wie sie ein produktives Moderationssystem voraussetzen würde. Ausdrücklich als Demo-Notlösung gekennzeichnet, nicht als Sicherheitsmodell gedacht.
 
 *Aufgelöst am 11. August 2026: die Mehrfachauswahl (§8.2) und das Freunde-Feature (§8.8) waren hier bisher als Abweichungen gelistet und sind jetzt in die Spezifikation selbst nachgezogen.*
+
+*Aufgelöst am 13. August 2026: der Moderations-Zugang über einen geteilten Demo-Code (`RR-MOD-2024`) war hier bisher als Abweichung gelistet. Mit der Supabase-Migration (Phase 6.7) läuft der Zugang jetzt über echte rollenbasierte Konten (Tabelle `moderators`, serverseitig durchgesetzt in `apply_moderation_decision()` sowie per RLS) — keine Abweichung mehr, sondern bereits das produktionsreife Verfahren, das dieser Punkt vorher nur einforderte.*
